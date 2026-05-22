@@ -10,8 +10,18 @@
 """
 import os
 import subprocess
+import sys
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from typing import Optional
+
+
+def _safe_print(text: str) -> None:
+    stream = sys.stderr
+    encoding = stream.encoding or "utf-8"
+    safe_text = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    print(safe_text, file=stream, flush=True)
 
 
 def notify(title: str, message: str, sound: bool = True) -> bool:
@@ -38,14 +48,14 @@ def notify(title: str, message: str, sound: bool = True) -> bool:
         return True
     except Exception:
         # fallback: 打印到 stderr
-        print(f"[NOTIFY] {title}: {message}", flush=True)
+        _safe_print(f"[NOTIFY] {title}: {message}")
         return False
 
 
 def notify_error(title: str, message: str) -> bool:
     """发送错误通知（带错误音效）"""
     try:
-        script = f'display notification "{message}" with title "❌ {title}" sound name "Basso"'
+        script = f'display notification "{message}" with title "ERROR: {title}" sound name "Basso"'
         subprocess.run(
             ["osascript", "-e", script],
             check=True,
@@ -54,16 +64,36 @@ def notify_error(title: str, message: str) -> bool:
         )
         return True
     except Exception:
-        print(f"[ERROR] {title}: {message}", flush=True)
+        _safe_print(f"[ERROR] {title}: {message}")
         return False
 
 
 def notify_success(title: str, message: str) -> bool:
     """发送成功通知"""
-    return notify(f"✅ {title}", message, sound=True)
+    return notify(f"SUCCESS: {title}", message, sound=True)
 
 
-# ========== CLI 测试 ==========
+def notify_telegram(title: str, message: str) -> bool:
+    """Send a Telegram notification when credentials are configured."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    user_id = os.getenv("TELEGRAM_USER_ID")
+    if not token or not user_id:
+        return notify(title, message)
+
+    try:
+        text = f"{title}\n{message}"
+        payload = urllib.parse.urlencode({"chat_id": user_id, "text": text}).encode("utf-8")
+        request = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status == 200
+    except Exception:
+        return notify(title, message)
+
+
 
 if __name__ == "__main__":
     import sys
