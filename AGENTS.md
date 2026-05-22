@@ -15,6 +15,16 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 All commands run from the project root:
 
 ```bash
+# Batch A-C regression checks
+python -m pytest tests/test_core_scoring.py tests/test_section_write.py tests/test_yahoo_symbol.py tests/test_backtest_timeline.py tests/test_data_manager_env.py -v
+python - <<'PY'
+from input.evidence import EvidenceExtractor
+from analyzer.research_score import ResearchScoreEngine
+from analyzer.timing_engine import TimingEngine
+from run_analysis import write_analysis_to_obsidian
+print('core/writeback imports ok')
+PY
+
 # Quick analysis (recommended) - generates formatted report and writes to Obsidian
 python scripts/analyze_stock.py AAPL
 
@@ -257,12 +267,15 @@ Always use normalized formats when calling Python helpers:
 | `603906` | `SH603906` | CN (Shanghai) |
 | `000001` | `SZ000001` | CN (Shenzhen) |
 
-The `DataManager.normalize_symbol()` function handles this automatically.
+The `DataManager.normalize_symbol()` function handles canonical internal symbols. Yahoo-backed helpers convert HK symbols to Yahoo's four-digit `.HK` format for data requests (`00700.HK` → `0700.HK`, `03986.HK` → `3986.HK`) while preserving canonical wiki identity.
 
 ## Module Reference
 
 | Module | Class/Function | Purpose |
 |--------|----------------|---------|
+| `input.evidence` | `EvidenceExtractor`, `EvidenceItem` | Typed evidence extraction from wiki, Materials and Inbox snippets |
+| `analyzer.research_score` | `ResearchScoreEngine` | Five-dimension Research Score with evidence adjustments |
+| `analyzer.timing_engine` | `TimingEngine` | Ready / Wait / Watch / Avoid timing state machine |
 | `scripts.analyze_stock` | `main()` | One-click analysis entry point |
 | `analyzer.report_generator.ReportGenerator` | `generate()` | Unified report formatting (tables + emojis) |
 | `analyzer.wyckoff_chart.WyckoffChartRenderer` | `render()` | Wyckoff chart visualization (price, MA, zones, phases, events) |
@@ -279,6 +292,10 @@ The `DataManager.normalize_symbol()` function handles this automatically.
 
 Each stock in `Analysis/{CODE}.md` has these sections:
 
+- `## 证据表` - Extracted evidence claims from wiki/materials/Inbox
+- `## 五维打分` - Research Score dimension table and total score
+- `## 交易时机状态` - Ready / Wait / Watch / Avoid timing state
+- `## 与上次分析相比` - Comparison with prior analysis
 - `## 综合评估` - Evaluation table (fundamental/valuation/technical/news/aggregate)
 - `## 分析时间线` - Analysis history (timestamp, price, score, type, core view)
 - `## 预测验证` - Backtest results

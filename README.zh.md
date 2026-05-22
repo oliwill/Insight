@@ -7,16 +7,24 @@
 ## 工作原理
 
 ```
-Inbox/（你丢素材进来）
+Inbox / Materials / 股票 wiki
     ↓
-Claude Code（编排分析流程）
+input.evidence.EvidenceExtractor
+    ↓
+analyzer.research_score.ResearchScoreEngine
+    ↓
+analyzer.timing_engine.TimingEngine
+    ↓
+analyzer.report_generator.ReportGenerator
+    ↓
+run_analysis.write_analysis_to_obsidian
     ↓
 Obsidian vault（Analysis 知识库 + Materials 原文档案 + Dashboard）
 ```
 
 1. 把 Substack 文章、Twitter 长推、研究笔记丢进 `Inbox/`
 2. 运行 `python run_analysis.py --scan` 或 `python run_analysis.py AAPL`
-3. Claude Code 自动获取行情数据、运行分析框架，并把结果直接写入 Obsidian 的 `.md` 文件
+3. Claude Code 自动获取行情数据、抽取证据、生成五维评分/交易时机状态，并把结构化 cockpit section 写入 Obsidian 的 `.md` 文件
 
 无需安装 Obsidian 插件，纯 Markdown 文件，可通过 Dropbox / iCloud / remotely-save 同步。
 
@@ -71,10 +79,10 @@ cp .env.example .env   # 填入你的路径和可选的 API key
 
 ```env
 WIKI_BASE_DIR=/你的 Obsidian vault 根目录
-WIKI_SUBDIR=Trader/Analysis
-MATERIALS_SUBDIR=Trader/Materials
+WIKI_SUBDIR=4_Trader/Analysis
+MATERIALS_SUBDIR=4_Trader/Materials
 OBSIDIAN_INBOX_DIR=/你的 Obsidian vault 根目录/Inbox
-OBSIDIAN_TASKS_DIR=/你的 Obsidian vault 根目录/Tasks
+OBSIDIAN_TASKS_DIR=/你的 Obsidian vault 根目录/4_Trader/Tasks
 OBSIDIAN_DASHBOARD_PATH=/你的 Obsidian vault 根目录/Dashboard.md
 ANALYSIS_TIMEOUT=30
 
@@ -105,19 +113,18 @@ python run_analysis.py --inbox     # 查看 Inbox 状态
 vault/
 ├── Inbox/              ← 把素材丢这里
 │   └── NVDA_note.md
-├── Trader/
-│   ├── Analysis/       ← 自动管理的股票知识库
+├── 4_Trader/           ← 按你的 vault 编号调整前缀
+│   ├── Analysis/       ← 自动管理的股票知识库 + 周复盘报告
 │   │   ├── AAPL_US.md
-│   │   └── TSLA_US.md
+│   │   └── 复盘_20260510.md
 │   ├── Materials/      ← 按股票归档的原文
 │   │   └── TSLA_US/
 │   ├── Charts/         ← 自动生成的 Wyckoff 图表
-│   │   └── INVZ_wyckoff.png
 │   └── Tasks/          ← 自动创建的交易/研究任务
 └── Dashboard.md        ← 持仓总览，自动更新
 ```
 
-> **文件命名规则**：股票代码中的 `.` 和 `/` 都会替换为 `_`，例如 `TEM.US` → `TEM_US.md`、`600487.SH` → `600487_SH.md`。
+> **文件命名规则**：股票代码中的 `.` 和 `/` 都会替换为 `_`，例如 `TEM.US` → `TEM_US.md`、`600487.SH` → `600487_SH.md`。`4_Trader/` 前缀只是示例，请通过 `.env` 中的 `WIKI_SUBDIR` / `MATERIALS_SUBDIR` 匹配你的 vault 结构。
 
 ## Inbox 素材格式
 
@@ -145,6 +152,8 @@ trader-obsidian/
 ├── scripts/
 │   └── analyze_stock.py  # 一键分析 + 格式化报告
 ├── analyzer/
+│   ├── research_score.py # 五维公司/投资假设质量评分
+│   ├── timing_engine.py  # Ready / Wait / Watch / Avoid 时机状态机
 │   ├── report_generator.py  # 统一报告格式化（表格 + emoji）
 │   ├── fundamental.py    # 基本面分析 + 6 维护城河打分
 │   ├── trading_grid.py   # 斐波那契、ATR 止损、风报比
@@ -164,11 +173,25 @@ trader-obsidian/
 │   ├── utils.py          # 路径、时间、文件 I/O
 │   └── section_parser.py # Markdown section 解析
 ├── input/
+│   ├── evidence.py       # 从 wiki / Materials / Inbox 抽取结构化证据
 │   └── ingest.py         # 素材摄入 + 标签索引
 ├── inbox_scanner.py      # 扫描 Inbox/ 中的待分析文件
 ├── skills/               # Agent 工作流清单（think / check / hunt / learn）
 └── backtest/             # 信号回测：与历史价格对照
 ```
+
+## 核心评分与时机状态
+
+可复用分析内核把公司质量和入场时机拆开：
+
+| 模块 | 职责 |
+|---|---|
+| `input.evidence` | 将 wiki、Materials、Inbox 片段转换为结构化证据 claim |
+| `analyzer.research_score` | 生成基础分和证据调整后的五维 Research Score |
+| `analyzer.timing_engine` | 单独生成 Ready / Wait / Watch / Avoid 时机状态 |
+| `run_analysis.write_analysis_to_obsidian` | 把证据、评分、时机、对比、timeline 和研究笔记写入 Obsidian，并避免重复顶层标题 |
+
+历史消费者同时兼容旧 `评分:` timeline 和新 `Research:` / `Timing:` timeline，因此回测与学习统计可以跨报告格式继续使用。
 
 ## 数据源
 
@@ -193,14 +216,21 @@ trader-obsidian/
 
 ## 股票代码归一化
 
-| 输入 | 归一化后 | 市场 |
-|---|---|---|
-| `AAPL` | `AAPL.US` | 美股 |
-| `00700` | `00700.HK` | 港股 |
-| `603906` | `SH603906` | 沪市 A 股 |
-| `000001` | `SZ000001` | 深市 A 股 |
+| 输入 | 内部代码 | 市场 | Yahoo Finance 代码 |
+|---|---|---|---|
+| `AAPL` | `AAPL.US` | 美股 | `AAPL` |
+| `00700` | `00700.HK` | 港股 | `0700.HK` |
+| `03986.HK` | `03986.HK` | 港股 | `3986.HK` |
+| `603906` | `SH603906` | 沪市 A 股 | `603906.SS` |
+| `000001` | `SZ000001` | 深市 A 股 | `000001.SZ` |
 
-由 `DataManager.normalize_symbol()` 自动处理。
+`DataManager.normalize_symbol()` 负责内部标准代码。Yahoo-backed helper 会把港股转换成 Yahoo 的 4 位 `.HK` 格式用于数据请求，同时保留内部代码用于 wiki 文件名和 Obsidian 身份。
+
+## 项目文档
+
+- [架构说明](docs/architecture.md) — 分析流水线、Obsidian 写回、股票代码模型
+- [运维手册](docs/runbook.md) — 安装配置、验证命令、故障排查
+- [交接说明](docs/handoff.md) — 已完成批次、当前 PR、下一批建议
 
 ## 运行环境
 

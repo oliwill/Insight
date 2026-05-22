@@ -7,16 +7,24 @@ A stock analysis system that uses Claude Code as the execution engine and Obsidi
 ## How It Works
 
 ```
-Inbox/ (you drop materials)
+Inbox / Materials / stock wiki
     ↓
-Claude Code (orchestrates analysis)
+input.evidence.EvidenceExtractor
+    ↓
+analyzer.research_score.ResearchScoreEngine
+    ↓
+analyzer.timing_engine.TimingEngine
+    ↓
+analyzer.report_generator.ReportGenerator
+    ↓
+run_analysis.write_analysis_to_obsidian
     ↓
 Obsidian vault (Analysis wiki + Materials + Dashboard)
 ```
 
 1. Drop a Substack article, Twitter thread, or research note into `Inbox/`
 2. Run `python run_analysis.py --scan` or `python run_analysis.py AAPL`
-3. Claude Code fetches market data, runs the analysis framework, and writes the output directly to your Obsidian `.md` files
+3. Claude Code fetches market data, extracts evidence, computes research score/timing state, and writes structured cockpit sections directly to your Obsidian `.md` files
 
 No Obsidian plugins required. Plain markdown files, synced via Dropbox/iCloud/remotely-save.
 
@@ -71,10 +79,10 @@ Configure `.env`:
 
 ```env
 WIKI_BASE_DIR=/path/to/your/obsidian/vault
-WIKI_SUBDIR=Trader/Analysis
-MATERIALS_SUBDIR=Trader/Materials
+WIKI_SUBDIR=4_Trader/Analysis
+MATERIALS_SUBDIR=4_Trader/Materials
 OBSIDIAN_INBOX_DIR=/path/to/your/obsidian/vault/Inbox
-OBSIDIAN_TASKS_DIR=/path/to/your/obsidian/vault/Tasks
+OBSIDIAN_TASKS_DIR=/path/to/your/obsidian/vault/4_Trader/Tasks
 OBSIDIAN_DASHBOARD_PATH=/path/to/your/obsidian/vault/Dashboard.md
 ANALYSIS_TIMEOUT=30
 
@@ -144,6 +152,8 @@ trader-obsidian/
 ├── scripts/
 │   └── analyze_stock.py  # one-click analysis with formatted report
 ├── analyzer/
+│   ├── research_score.py # five-dimension thesis/company quality scoring
+│   ├── timing_engine.py  # Ready/Wait/Watch/Avoid timing state machine
 │   ├── report_generator.py  # unified report formatting (tables + emojis)
 │   ├── fundamental.py    # fundamental analysis + 6-dimension moat scoring
 │   ├── trading_grid.py   # Fibonacci levels, ATR stops, R/R ratios
@@ -159,8 +169,11 @@ trader-obsidian/
 │   ├── liquidity.py      # short interest, ADTV, market impact
 │   └── correlation.py    # peer correlation matrix
 ├── memory/
-│   └── manager.py        # MemoryManager: wiki read/write, timeline, materials
+│   ├── manager.py        # MemoryManager: wiki read/write, timeline, materials
+│   ├── utils.py          # paths, dates, file I/O helpers
+│   └── section_parser.py # Markdown section parsing/replacement
 ├── input/
+│   ├── evidence.py       # typed evidence extraction from wiki/materials/Inbox
 │   └── ingest.py         # material intake with tag indexing
 ├── inbox_scanner.py      # scans Inbox/ for pending analysis
 ├── skills/               # agent workflow checklists (think/check/hunt/learn)
@@ -171,6 +184,19 @@ trader-obsidian/
     ├── framework_analyzer.py  # FrameworkAnalyzer: pattern analysis + framework suggestions
     └── report.py         # ReportGenerator: markdown/CSV/chart outputs
 ```
+
+## Core Scoring and Timing
+
+The reusable analysis kernel separates company quality from entry timing:
+
+| Module | Responsibility |
+|---|---|
+| `input.evidence` | Convert wiki, Materials and Inbox snippets into typed evidence claims |
+| `analyzer.research_score` | Produce base and evidence-adjusted five-dimension Research Score |
+| `analyzer.timing_engine` | Produce a separate Ready/Wait/Watch/Avoid timing state |
+| `run_analysis.write_analysis_to_obsidian` | Write evidence, score, timing, comparison, timeline and research-note sections into Obsidian without duplicate top-level headings |
+
+Timeline/history consumers support both legacy `评分:` rows and cockpit `Research:` / `Timing:` rows, so backtests and learning stats remain compatible across report formats.
 
 ## Data Sources
 
@@ -195,14 +221,21 @@ The `skills/` directory contains structured checklists that guide Claude Code th
 
 ## Symbol Normalization
 
-| Input | Normalized | Market |
-|---|---|---|
-| `AAPL` | `AAPL.US` | US |
-| `00700` | `00700.HK` | HK |
-| `603906` | `SH603906` | CN Shanghai |
-| `000001` | `SZ000001` | CN Shenzhen |
+| Input | Internal Code | Market | Yahoo Finance Code |
+|---|---|---|---|
+| `AAPL` | `AAPL.US` | US | `AAPL` |
+| `00700` | `00700.HK` | HK | `0700.HK` |
+| `03986.HK` | `03986.HK` | HK | `3986.HK` |
+| `603906` | `SH603906` | CN Shanghai | `603906.SS` |
+| `000001` | `SZ000001` | CN Shenzhen | `000001.SZ` |
 
-Handled automatically by `DataManager.normalize_symbol()`.
+`DataManager.normalize_symbol()` handles the canonical internal code. Yahoo-backed helpers convert HK symbols to Yahoo's four-digit `.HK` form for data requests while preserving the canonical code for wiki filenames and Obsidian identity.
+
+## Project Documentation
+
+- [Architecture](docs/architecture.md) — analysis pipeline, Obsidian writeback, symbol model
+- [Runbook](docs/runbook.md) — setup, verification commands, troubleshooting
+- [Handoff](docs/handoff.md) — completed batches, open PRs, next-batch guidance
 
 ## Requirements
 
