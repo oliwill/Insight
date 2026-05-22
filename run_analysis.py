@@ -20,6 +20,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # 导入统一配置（config.py 会自动加载 .env）
 from config import Config
 
@@ -109,6 +112,26 @@ def load_inbox_materials(stock_code: str) -> List[dict]:
 # ========== 写回 Obsidian ==========
 
 
+def _strip_section_heading(markdown: str, section_name: str) -> str:
+    lines = markdown.strip().splitlines()
+    if lines and lines[0].strip() == f"## {section_name}":
+        return "\n".join(lines[1:]).strip()
+    return markdown.strip()
+
+
+def _demote_markdown_headings(markdown: str) -> str:
+    lines = []
+    for line in markdown.splitlines():
+        if line.startswith("#"):
+            level = len(line) - len(line.lstrip("#"))
+            rest = line[level:]
+            new_level = max(3, level + 1)
+            lines.append("#" * new_level + rest)
+        else:
+            lines.append(line)
+    return "\n".join(lines).strip()
+
+
 def write_analysis_to_obsidian(
     stock_code: str,
     stock_name: str,
@@ -122,6 +145,13 @@ def write_analysis_to_obsidian(
     options: Dict = None,
     peers: List[Dict] = None,
     web_search: Dict = None,
+    evidence_markdown: str = "",
+    research_score_markdown: str = "",
+    timing_markdown: str = "",
+    comparison_markdown: str = "",
+    research_score: float = None,
+    timing_state: str = "",
+    entry_trigger: str = "",
 ):
     """
     将分析结果写入 Obsidian
@@ -139,27 +169,48 @@ def write_analysis_to_obsidian(
         options: 期权数据 (options-payoff)
         peers: 相关性 peer 列表 (stock-correlation)
         web_search: 网络搜索结果（含 reddit/polymarket）
+        evidence_markdown: 证据表 markdown（替换写入）
+        research_score_markdown: 五维打分 markdown（替换写入）
+        timing_markdown: 交易时机状态 markdown（替换写入）
+        comparison_markdown: 与上次分析相比 markdown（替换写入）
+        research_score: 五维研究总分，用于 backtest-ready timeline
+        timing_state: Ready/Wait/Watch/Avoid，用于 backtest-ready timeline
+        entry_trigger: 关键触发条件，用于 backtest-ready timeline
     """
     mm = MemoryManager()
 
     # 确保 Wiki 存在
     mm.init_stock_wiki(stock_code, stock_name)
 
+    display_score = research_score if research_score is not None else score
+
     # 更新评估表
     mm.update_evaluation_table(
         stock_code=stock_code,
         stock_name=stock_name,
         dimension="综合",
-        current_judgment=f"评分 {score}/100 - {core_view or '分析完成'}",
+        current_judgment=f"评分 {display_score}/100 - {core_view or '分析完成'}",
+    )
+
+    # 更新 Cockpit 结构化章节
+    mm.update_cockpit_sections(
+        stock_code=stock_code,
+        evidence_markdown=evidence_markdown,
+        research_score_markdown=research_score_markdown,
+        timing_markdown=timing_markdown,
+        comparison_markdown=comparison_markdown,
     )
 
     # 追加到时间线
     mm.append_to_timeline(
         stock_code=stock_code,
         price=price,
-        score=score,
+        score=display_score,
         core_view=core_view,
-        analysis_type="Claude Code 分析",
+        analysis_type="Cockpit 分析" if timing_state or research_score is not None else "Claude Code 分析",
+        research_score=research_score,
+        timing_state=timing_state,
+        entry_trigger=entry_trigger,
     )
 
     # ===== 写入新模块数据 =====
@@ -168,32 +219,32 @@ def write_analysis_to_obsidian(
     if earnings and not earnings.get("error"):
         from data.earnings import EarningsCalendar
         ec = EarningsCalendar()
-        md = ec.format_earnings_markdown(earnings)
-        if md and md.strip() != "## 财报预期\n\n":
+        md = _strip_section_heading(ec.format_earnings_markdown(earnings), "财报预期")
+        if md:
             mm.append_to_section(stock_code, "财报预期", md)
 
     # 2. 流动性分析 (stock-liquidity)
     if liquidity and not liquidity.get("error"):
         from data.liquidity import LiquidityAnalyzer
         la = LiquidityAnalyzer()
-        md = la.to_markdown(liquidity)
-        if md and md.strip() != "## 流动性分析\n\n":
+        md = _strip_section_heading(la.to_markdown(liquidity), "流动性分析")
+        if md:
             mm.append_to_section(stock_code, "流动性分析", md)
 
     # 3. 期权市场 (options-payoff)
     if options and not options.get("error"):
         from data.options import OptionsAnalyzer
         oa = OptionsAnalyzer()
-        md = oa.to_markdown(options)
-        if md and md.strip() != "## 期权市场\n\n":
+        md = _strip_section_heading(oa.to_markdown(options), "期权市场")
+        if md:
             mm.append_to_section(stock_code, "期权市场", md)
 
     # 4. 交叉引用 (stock-correlation)
     if peers:
         from data.correlation import CorrelationAnalyzer
         ca = CorrelationAnalyzer()
-        md = ca.to_markdown(peers, stock_code)
-        if md and md.strip() != "## 交叉引用\n\n":
+        md = _strip_section_heading(ca.to_markdown(peers, stock_code), "交叉引用")
+        if md:
             mm.append_to_section(stock_code, "交叉引用", md)
 
     # 5. 社交情绪 (finance-sentiment)
@@ -216,11 +267,12 @@ def write_analysis_to_obsidian(
             mm.append_to_section(stock_code, "社交情绪", "\n".join(lines))
 
     # 追加到研究笔记
-    entry = f"\n\n### [{datetime.now().strftime('%Y-%m-%d %H:%M')}] Claude Code 分析\n\n{analysis_text}\n"
+    note_text = _demote_markdown_headings(analysis_text)
+    entry = f"\n\n### [{datetime.now().strftime('%Y-%m-%d %H:%M')}] Claude Code 分析\n\n{note_text}\n"
     mm.append_to_section(stock_code, "研究笔记", entry)
 
     # 更新 index
-    mm.update_index(stock_code, stock_name, score)
+    mm.update_index(stock_code, stock_name, display_score)
 
     print(f"Analysis written to Obsidian: {stock_code}")
 

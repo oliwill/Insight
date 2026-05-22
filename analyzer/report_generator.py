@@ -4,7 +4,7 @@
 
 整合所有数据模块，生成格式化的 Markdown 分析报告
 """
-from typing import Dict, Any
+from typing import Dict, Any, Sequence
 from datetime import datetime
 
 
@@ -26,7 +26,7 @@ class ReportGenerator:
     }
 
     @classmethod
-    def generate(cls, stock_code: str, market_data: Dict[str, Any]) -> str:
+    def generate(cls, stock_code: str, market_data: Dict[str, Any], research_score=None, timing_state=None, evidence: Sequence = None) -> str:
         """
         生成完整的分析报告
 
@@ -50,7 +50,7 @@ class ReportGenerator:
         # 生成各章节
         sections = []
 
-        sections.append(cls._section_1_overview(stock_code, stock_info, technicals, fundamentals, liquidity, options, wyckoff, earnings, web_search))
+        sections.append(cls._section_1_overview(stock_code, stock_info, technicals, fundamentals, liquidity, options, wyckoff, earnings, web_search, research_score, timing_state, evidence or []))
         sections.append(cls._section_2_technical(technicals, wyckoff))
         sections.append(cls._section_3_fundamental(fundamentals))
         sections.append(cls._section_4_market_structure(liquidity, options, web_search))
@@ -60,76 +60,114 @@ class ReportGenerator:
         return "\n\n".join(sections)
 
     @classmethod
-    def _section_1_overview(cls, stock_code: str, stock_info: Dict, technicals: Dict, fundamentals: Dict, liquidity: Dict, options: Dict, wyckoff: Dict, earnings: Dict, web_search: Dict) -> str:
+    def _section_1_overview(cls, stock_code: str, stock_info: Dict, technicals: Dict, fundamentals: Dict, liquidity: Dict, options: Dict, wyckoff: Dict, earnings: Dict, web_search: Dict, research_score=None, timing_state=None, evidence: Sequence = ()) -> str:
         """第一部分：核心观点"""
         name = stock_info.get('name', 'Unknown')
         sector = stock_info.get('sector', '-')
         industry = stock_info.get('industry', '-')
-        price = stock_info.get('price', 0)
-        change_pct = stock_info.get('change_pct', 0)
+        price = stock_info.get('price') or 0
+        change_pct = stock_info.get('change_pct') or 0
+        pe_forward = fundamentals.get('pe_forward') or 0
+        target_mean = fundamentals.get('target_mean_price') or 0
+        target_low = fundamentals.get('target_low_price') or 0
+        target_high = fundamentals.get('target_high_price') or 0
+        analyst_count = fundamentals.get('analyst_count') or 0
+        recommendation = (fundamentals.get('recommendation_key') or '-').upper()
+        short_percent_float = liquidity.get('short_percent_float') or 0
+        days_to_cover = liquidity.get('days_to_cover') or 0
+        institutional_ownership = liquidity.get('institutional_ownership') or 0
+        daily_dollar_volume = liquidity.get('daily_dollar_volume') or 0
+
+        def fmt_money(value):
+            return f"${value:,.2f}" if value else "N/A"
+
+        def fmt_num(value, digits=2):
+            return f"{value:.{digits}f}" if value is not None else "N/A"
+
+        def fmt_pct(value, digits=1, signed=False):
+            if value is None:
+                return "N/A"
+            sign = "+" if signed else ""
+            return f"{value:{sign}.{digits}f}%"
 
         # 评分
-        wyckoff_score = fundamentals.get('wyckoff_score', 50)  # 默认中性
-        score_emoji = cls._get_score_emoji(wyckoff_score)
+        research_value = getattr(research_score, 'total_adjusted_score', None)
+        if research_value is None:
+            research_value = market_score = fundamentals.get('wyckoff_score', 50)
+        else:
+            market_score = research_value
+        score_emoji = cls._get_score_emoji(research_value)
+        timing_label = getattr(timing_state, 'state', 'N/A')
+        timing_internal = getattr(timing_state, 'internal_score', None)
 
         # 估值信号
-        target_mean = fundamentals.get('target_mean_price', 0)
         potential = (target_mean / price - 1) * 100 if price > 0 and target_mean > 0 else 0
 
         # 趋势信号
         trend_short = technicals.get('trend_short', 'NEUTRAL')
         rsi = technicals.get('rsi_14', 50)
+        put_call_ratio = options.get('put_call_ratio')
+        put_call_display = f"{put_call_ratio:.2f}" if put_call_ratio is not None else "N/A"
+        max_pain = options.get('max_pain')
+        max_pain_display = f"${max_pain:.2f}" if max_pain is not None else "N/A"
 
         return f"""## 一、核心观点
 
-**综合评分**：{wyckoff_score}/100 {score_emoji}
+**Research Score**：{research_value:.1f}/100 {score_emoji}
+**Timing State**：{timing_label}{f"（内部时机分 {timing_internal}/100）" if timing_internal is not None else ""}
 
 **股票信息**：{name} ({stock_code}) | {sector} / {industry}
-**当前价格**：${price:,.2f} ({change_pct:+.2f}%)
+**当前价格**：{fmt_money(price)} ({fmt_pct(change_pct, 2, signed=True)})
 
 ### {cls.EMOJI['chart']} 快速评估
 
 | 维度 | 数值 | 评级 |
 |------|------|------|
-| 估值 | PE(Forward) {fundamentals.get('pe_forward', 0):.2f} | {cls._get_valuation_signal(potential)} |
-| 潜在涨幅 | {potential:+.1f}% | {cls._get_potential_emoji(potential)} |
+| 估值 | PE(Forward) {fmt_num(pe_forward)} | {cls._get_valuation_signal(potential)} |
+| 潜在涨幅 | {fmt_pct(potential, 1, signed=True)} | {cls._get_potential_emoji(potential)} |
 | 趋势 | {trend_short} | {cls._get_trend_emoji(trend_short)} |
-| RSI | {rsi:.1f} | {cls._get_rsi_signal(rsi)} |
-| 做空比例 | {liquidity.get('short_percent_float', 0) * 100:.1f}% | {cls._get_short_signal(liquidity.get('short_percent_float', 0) * 100)} |
+| RSI | {fmt_num(rsi, 1)} | {cls._get_rsi_signal(rsi)} |
+| 做空比例 | {fmt_pct(short_percent_float * 100, 1)} | {cls._get_short_signal(short_percent_float * 100)} |
+
+### 证据摘要
+{cls._format_evidence_summary(evidence)}
+
+### 交易时机
+{cls._format_timing_summary(timing_state)}
 
 ### {cls.EMOJI['target']} 分析师预期
-- **目标价均值**：${target_mean:.2f} ({potential:+.1f}%)
-- **目标价区间**：${fundamentals.get('target_low_price', 0):.2f} - ${fundamentals.get('target_high_price', 0):.2f}
-- **评级**：{fundamentals.get('recommendation_key', '-').upper()} ({fundamentals.get('analyst_count', 0)} 位分析师)
+- **目标价均值**：{fmt_money(target_mean)} ({fmt_pct(potential, 1, signed=True)})
+- **目标价区间**：{fmt_money(target_low)} - {fmt_money(target_high)}
+- **评级**：{recommendation} ({analyst_count} 位分析师)
 
 ---
 
 ## 二、技术分析
 
 ### 价格位置
-- **当前价格**：${price:.2f}
-- **52周区间**：${technicals.get('period_low', 0):.2f} - ${technicals.get('period_high', 0):.2f}
-- **距高点**：{technicals.get('pct_from_high', 0):+.1f}% | **距低点**：{technicals.get('pct_from_low', 0):+.1f}%
+- **当前价格**：{fmt_money(price)}
+- **52周区间**：{fmt_money(technicals.get('period_low'))} - {fmt_money(technicals.get('period_high'))}
+- **距高点**：{fmt_pct(technicals.get('pct_from_high'), 1, signed=True)} | **距低点**：{fmt_pct(technicals.get('pct_from_low'), 1, signed=True)}
 
 ### 趋势分析
-- **短期**：{trend_short} (MA5: ${technicals.get('ma5', 0):.2f} vs MA20: ${technicals.get('ma20', 0):.2f}) {cls._get_trend_emoji(trend_short)}
-- **中期**：{technicals.get('trend_mid', 'NEUTRAL')} (MA20 vs MA50: ${technicals.get('ma50', 0):.2f})
+- **短期**：{trend_short} (MA5: {fmt_money(technicals.get('ma5'))} vs MA20: {fmt_money(technicals.get('ma20'))}) {cls._get_trend_emoji(trend_short)}
+- **中期**：{technicals.get('trend_mid', 'NEUTRAL')} (MA20 vs MA50: {fmt_money(technicals.get('ma50'))})
 
 ### 技术指标
 | 指标 | 数值 | 信号 |
 |------|------|------|
-| RSI(14) | {rsi:.2f} | {cls._get_rsi_signal(rsi)} |
-| MACD | {technicals.get('macd', 0):.3f} | {cls._get_macd_signal(technicals.get('macd_hist', 0))} |
-| KDJ_K | {technicals.get('kdj_k', 0):.2f} | {cls._get_kdj_signal(technicals.get('kdj_k', 0), technicals.get('kdj_d', 0))} |
+| RSI(14) | {fmt_num(rsi, 2)} | {cls._get_rsi_signal(rsi)} |
+| MACD | {fmt_num(technicals.get('macd'), 3)} | {cls._get_macd_signal(technicals.get('macd_hist'))} |
+| KDJ_K | {fmt_num(technicals.get('kdj_k'), 2)} | {cls._get_kdj_signal(technicals.get('kdj_k'), technicals.get('kdj_d'))} |
 
 ### 支撑/阻力
-- **阻力**：${technicals.get('resistance_20d', 0):.2f} (20日)
-- **支撑**：${technicals.get('support_20d', 0):.2f} (20日)
+- **阻力**：{fmt_money(technicals.get('resistance_20d'))} (20日)
+- **支撑**：{fmt_money(technicals.get('support_20d'))} (20日)
 
 ### Wyckoff 分析
 - **阶段**：{wyckoff.get('phase', 'N/A')}
-- **区间**：${wyckoff.get('support', 0):.2f} - ${wyckoff.get('resistance', 0):.2f}
-- **置信度**：{wyckoff.get('confidence', 0)}%
+- **区间**：{fmt_money(wyckoff.get('support'))} - {fmt_money(wyckoff.get('resistance'))}
+- **置信度**：{fmt_pct(wyckoff.get('confidence'), 0)}
 
 ### Wyckoff 图表
 ![Wyckoff分析](../Charts/{stock_code.replace('.', '_')}_wyckoff.png)
@@ -145,26 +183,26 @@ class ReportGenerator:
 ### 估值水平
 | 指标 | 数值 | 评价 |
 |------|------|------|
-| PE (Forward) | {fundamentals.get('pe_forward', 0):.2f} | {cls._get_pe_signal(fundamentals.get('pe_forward', 0))} |
-| PB | {fundamentals.get('pb', 0):.2f} | {cls._get_pb_signal(fundamentals.get('pb', 0))} |
-| PS | {fundamentals.get('ps', 0):.2f} | {cls._get_ps_signal(fundamentals.get('ps', 0))} |
+| PE (Forward) | {fmt_num(fundamentals.get('pe_forward'))} | {cls._get_pe_signal(fundamentals.get('pe_forward'))} |
+| PB | {fmt_num(fundamentals.get('pb'))} | {cls._get_pb_signal(fundamentals.get('pb'))} |
+| PS | {fmt_num(fundamentals.get('ps'))} | {cls._get_ps_signal(fundamentals.get('ps'))} |
 
 ### 盈利能力
 | 指标 | 数值 | 评价 |
 |------|------|------|
-| ROE | {fundamentals.get('roe', 0) * 100:.2f}% | {cls._get_roe_signal(fundamentals.get('roe', 0) * 100)} |
-| ROA | {fundamentals.get('roa', 0) * 100:.2f}% | {cls._get_roa_signal(fundamentals.get('roa', 0) * 100)} |
-| 毛利率 | {fundamentals.get('gross_margin', 0) * 100:.2f}% | {cls._get_margin_signal(fundamentals.get('gross_margin', 0) * 100)} |
-| 净利率 | {fundamentals.get('profit_margin', 0) * 100:.2f}% | {cls._get_margin_signal(fundamentals.get('profit_margin', 0) * 100)} |
+| ROE | {fmt_pct(cls._percent_value(fundamentals.get('roe')), 2)} | {cls._get_roe_signal(cls._percent_value(fundamentals.get('roe')))} |
+| ROA | {fmt_pct(cls._percent_value(fundamentals.get('roa')), 2)} | {cls._get_roa_signal(cls._percent_value(fundamentals.get('roa')))} |
+| 毛利率 | {fmt_pct(cls._percent_value(fundamentals.get('gross_margin')), 2)} | {cls._get_margin_signal(cls._percent_value(fundamentals.get('gross_margin')))} |
+| 净利率 | {fmt_pct(cls._percent_value(fundamentals.get('profit_margin')), 2)} | {cls._get_margin_signal(cls._percent_value(fundamentals.get('profit_margin')))} |
 
 ### 成长性
-- **营收增长**：{fundamentals.get('revenue_growth', 0) * 100:+.1f}% YoY {cls._get_growth_emoji(fundamentals.get('revenue_growth', 0) * 100)}
+- **营收增长**：{fmt_pct(cls._percent_value(fundamentals.get('revenue_growth')), 1, signed=True)} YoY {cls._get_growth_emoji(cls._percent_value(fundamentals.get('revenue_growth')))}
 
 ### 财务健康
-- **流动比率**：{fundamentals.get('current_ratio', 0):.2f} {cls._get_current_ratio_signal(fundamentals.get('current_ratio', 0))}
-- **债务权益比**：{fundamentals.get('debt_equity', 0):.1f}
-- **现金**：${fundamentals.get('total_cash', 0) / 1_000_000:.1f}M | **债务**：${fundamentals.get('total_debt', 0) / 1_000_000:.1f}M
-- **自由现金流**：${fundamentals.get('free_cashflow', 0) / 1_000_000:.1f}M {cls._get_fcf_signal(fundamentals.get('free_cashflow', 0))}
+- **流动比率**：{fmt_num(fundamentals.get('current_ratio'))} {cls._get_current_ratio_signal(fundamentals.get('current_ratio'))}
+- **债务权益比**：{fmt_num(fundamentals.get('debt_equity'), 1)}
+- **现金**：{cls._format_large_money(fundamentals.get('total_cash'))} | **债务**：{cls._format_large_money(fundamentals.get('total_debt'))}
+- **自由现金流**：{cls._format_large_money(fundamentals.get('free_cashflow'))} {cls._get_fcf_signal(fundamentals.get('free_cashflow'))}
 
 ---
 
@@ -179,14 +217,14 @@ class ReportGenerator:
 ### 流动性分析
 | 指标 | 数值 | 评价 |
 |------|------|------|
-| 做空比例 | {liquidity.get('short_percent_float', 0) * 100:.1f}% | {cls._get_short_signal(liquidity.get('short_percent_float', 0) * 100)} |
-| Days to Cover | {liquidity.get('days_to_cover', 0):.1f}天 | {cls._get_days_to_cover_signal(liquidity.get('days_to_cover', 0))} |
-| 机构持仓 | {liquidity.get('institutional_ownership', 0) * 100:.1f}% | - |
-| 日均成交额 | ${liquidity.get('daily_dollar_volume', 0) / 1_000_000:.1f}M | {cls._get_volume_signal(liquidity.get('daily_dollar_volume', 0) / 1_000_000)} |
+| 做空比例 | {fmt_pct(short_percent_float * 100, 1)} | {cls._get_short_signal(short_percent_float * 100)} |
+| Days to Cover | {fmt_num(days_to_cover, 1)}天 | {cls._get_days_to_cover_signal(days_to_cover)} |
+| 机构持仓 | {fmt_pct(institutional_ownership * 100, 1)} | - |
+| 日均成交额 | {cls._format_large_money(daily_dollar_volume)} | {cls._get_volume_signal(daily_dollar_volume / 1_000_000 if daily_dollar_volume else None)} |
 
 ### 期权市场
-- **Put/Call Ratio**：{options.get('put_call_ratio', 0):.2f} {cls._get_putcall_signal(options.get('put_call_ratio', 0))}
-- **Max Pain**：${options.get('max_pain', 0):.2f}
+- **Put/Call Ratio**：{put_call_display} {cls._get_putcall_signal(put_call_ratio)}
+- **Max Pain**：{max_pain_display}
 
 ---
 
@@ -203,14 +241,14 @@ class ReportGenerator:
 ## 六、操作建议
 
 ### 当前状态
-{cls._get_action_emoji(wyckoff_score)} | 综合评分 {wyckoff_score}/100
+{cls._get_timing_action(timing_label)} | Research Score {research_value:.1f}/100 | Timing {timing_label}
 
 ### 交易网格
 {cls._get_trading_grid(stock_info, technicals, fundamentals, wyckoff)}
 
 ### 仓位管理
-- **建议仓位**：{cls._get_position_size(wyckoff_score)}
-- **止损位**：基于 ATR 2.5x 或 ${technicals.get('support_20d', 0):.2f}
+- **建议仓位**：{cls._get_timing_position(timing_label, research_value)}
+- **止损位**：基于 ATR 2.5x 或 {fmt_money(technicals.get('support_20d'))}
 
 ---
 
@@ -245,7 +283,34 @@ class ReportGenerator:
     # ========== 辅助方法：信号判定 ==========
 
     @classmethod
+    def _format_evidence_summary(cls, evidence: Sequence) -> str:
+        if not evidence:
+            return "- 暂无结构化 Obsidian 证据"
+        lines = []
+        for item in list(evidence)[:5]:
+            claim = getattr(item, 'claim', '')[:100]
+            evidence_type = getattr(item, 'evidence_type', '-')
+            credibility = getattr(item, 'credibility', '-')
+            impact = getattr(item, 'score_impact', '-')
+            lines.append(f"- [{evidence_type}/{credibility}/{impact}] {claim}")
+        return "\n".join(lines)
+
+    @classmethod
+    def _format_timing_summary(cls, timing_state) -> str:
+        if not timing_state:
+            return "- Timing State 暂不可用"
+        lines = [f"- **状态**：{getattr(timing_state, 'state', 'N/A')}"]
+        reasons = getattr(timing_state, 'reasons', []) or []
+        triggers = getattr(timing_state, 'entry_triggers', []) or []
+        if reasons:
+            lines.append(f"- **主因**：{reasons[0]}")
+        if triggers:
+            lines.append(f"- **首要触发条件**：{triggers[0]}")
+        return "\n".join(lines)
+
+    @classmethod
     def _get_score_emoji(cls, score: float) -> str:
+        score = score or 0
         return cls.EMOJI['positive'] if score >= 70 else cls.EMOJI['neutral'] if score >= 50 else cls.EMOJI['negative']
 
     @classmethod
@@ -262,6 +327,8 @@ class ReportGenerator:
 
     @classmethod
     def _get_rsi_signal(cls, rsi: float) -> str:
+        if rsi is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 超卖" if rsi < 30 else f"{cls.EMOJI['negative']} 超买" if rsi > 70 else f"{cls.EMOJI['neutral']} 中性"
 
     @classmethod
@@ -270,59 +337,100 @@ class ReportGenerator:
 
     @classmethod
     def _get_macd_signal(cls, macd_hist: float) -> str:
+        if macd_hist is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 金叉" if macd_hist > 0 else f"{cls.EMOJI['negative']} 死叉"
 
     @classmethod
     def _get_kdj_signal(cls, k: float, d: float) -> str:
+        if k is None or d is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']}" if k > d else f"{cls.EMOJI['negative']}"
 
     @classmethod
     def _get_pe_signal(cls, pe: float) -> str:
+        if pe is None or pe == 0:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['warning']} 亏损" if pe < 0 else f"{cls.EMOJI['positive']} 合理" if pe < 20 else f"{cls.EMOJI['neutral']} 偏高"
 
     @classmethod
     def _get_pb_signal(cls, pb: float) -> str:
+        if pb is None or pb == 0:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 低" if pb < 1 else f"{cls.EMOJI['neutral']} 中等" if pb < 3 else f"{cls.EMOJI['negative']} 高"
 
     @classmethod
     def _get_ps_signal(cls, ps: float) -> str:
+        if ps is None or ps == 0:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 低" if ps < 1 else f"{cls.EMOJI['neutral']} 中等" if ps < 3 else f"{cls.EMOJI['negative']} 高"
 
     @classmethod
     def _get_roe_signal(cls, roe: float) -> str:
+        if roe is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 优秀" if roe > 15 else f"{cls.EMOJI['neutral']} 一般" if roe > 0 else f"{cls.EMOJI['negative']} 亏损"
 
     @classmethod
     def _get_roa_signal(cls, roa: float) -> str:
+        if roa is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 优秀" if roa > 10 else f"{cls.EMOJI['neutral']} 一般" if roa > 0 else f"{cls.EMOJI['negative']} 亏损"
 
     @classmethod
     def _get_margin_signal(cls, margin: float) -> str:
+        if margin is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 高" if margin > 40 else f"{cls.EMOJI['neutral']} 中等" if margin > 20 else f"{cls.EMOJI['negative']} 低"
 
     @classmethod
     def _get_growth_emoji(cls, growth: float) -> str:
+        if growth is None:
+            return f"{cls.EMOJI['neutral']}"
         return f"{cls.EMOJI['rocket']}" if growth > 20 else f"➡️" if growth > 0 else f"{cls.EMOJI['warning']}"
 
     @classmethod
     def _get_current_ratio_signal(cls, ratio: float) -> str:
+        if ratio is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 健康" if ratio > 1.5 else f"{cls.EMOJI['neutral']} 一般" if ratio > 1 else f"{cls.EMOJI['negative']} 紧张"
 
     @classmethod
     def _get_fcf_signal(cls, fcf: float) -> str:
+        if fcf is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['positive']} 正向" if fcf > 0 else f"{cls.EMOJI['negative']} 烧钱"
 
     @classmethod
     def _get_days_to_cover_signal(cls, days: float) -> str:
+        if days is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['warning']} 流动性差" if days > 5 else f"{cls.EMOJI['positive']} 正常"
 
     @classmethod
     def _get_volume_signal(cls, volume: float) -> str:
+        if volume is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['warning']} 低" if volume < 2 else f"{cls.EMOJI['positive']} 正常"
 
     @classmethod
     def _get_putcall_signal(cls, ratio: float) -> str:
+        if ratio is None:
+            return f"{cls.EMOJI['neutral']} 无数据"
         return f"{cls.EMOJI['negative']} 极度看空" if ratio > 10 else f"{cls.EMOJI['neutral']} 看空" if ratio > 1 else f"{cls.EMOJI['positive']} 看多"
+
+    @classmethod
+    def _percent_value(cls, value):
+        if value is None:
+            return None
+        value = float(value)
+        return value * 100 if abs(value) <= 1 else value
+
+    @classmethod
+    def _format_large_money(cls, value) -> str:
+        if value is None:
+            return "N/A"
+        return f"${float(value) / 1_000_000:.1f}M"
 
     @classmethod
     def _get_positive_catalysts(cls, fundamentals: Dict, earnings: Dict, price: float = 0) -> str:
@@ -335,8 +443,8 @@ class ReportGenerator:
             catalysts.append(f"1. **财报超预期**：下次财报 {history[0].get('date', 'N/A')}")
 
         # 分析师目标价
-        target_mean = fundamentals.get('target_mean_price', 0)
-        if target_mean > 0 and price > 0:
+        target_mean = fundamentals.get('target_mean_price') or 0
+        if target_mean > 0 and price and price > 0:
             potential = (target_mean / price - 1) * 100
             catalysts.append(f"2. **分析师上调**：目标价均值 ${target_mean:.2f} 暗示 {potential:+.1f}% 空间")
 
@@ -348,17 +456,17 @@ class ReportGenerator:
         risks = []
 
         # 流动性
-        daily_volume = liquidity.get('daily_dollar_volume', 0) / 1_000_000
+        daily_volume = (liquidity.get('daily_dollar_volume') or 0) / 1_000_000
         if daily_volume < 2:
             risks.append(f"1. **流动性风险**：日均成交额 ${daily_volume:.1f}M 较低")
 
         # 做空
-        short_pct = liquidity.get('short_percent_float', 0) * 100
+        short_pct = (liquidity.get('short_percent_float') or 0) * 100
         if short_pct > 5:
             risks.append(f"2. **做空挤压风险**")
 
         # 现金流
-        fcf = fundamentals.get('free_cashflow', 0) / 1_000_000
+        fcf = (fundamentals.get('free_cashflow') or 0) / 1_000_000
         if fcf < 0:
             risks.append(f"3. **现金流压力**：自由现金流 ${fcf:.1f}M")
 
@@ -367,6 +475,30 @@ class ReportGenerator:
     @classmethod
     def _get_action_emoji(cls, score: float) -> str:
         return f"{cls.EMOJI['positive']} 建仓" if score >= 60 else f"{cls.EMOJI['neutral']} 观望" if score >= 40 else f"{cls.EMOJI['negative']} 回避"
+
+    @classmethod
+    def _get_timing_action(cls, timing_label: str) -> str:
+        mapping = {
+            "Ready": f"{cls.EMOJI['positive']} 可行动",
+            "Wait": f"{cls.EMOJI['neutral']} 等待",
+            "Watch": f"{cls.EMOJI['neutral']} 观察",
+            "Avoid": f"{cls.EMOJI['negative']} 回避",
+        }
+        return mapping.get(timing_label, f"{cls.EMOJI['neutral']} 未知")
+
+    @classmethod
+    def _get_timing_position(cls, timing_label: str, research_score: float) -> str:
+        if timing_label == "Ready":
+            if research_score >= 75:
+                return "3-5%"
+            if research_score >= 60:
+                return "2-3%"
+            return "≤1%"
+        if timing_label == "Wait":
+            return "0%，等待触发条件"
+        if timing_label == "Watch":
+            return "0-1%，仅观察/小仓试探"
+        return "0%"
 
     @classmethod
     def _get_action_text(cls, score: float) -> str:
