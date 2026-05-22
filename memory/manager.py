@@ -16,6 +16,7 @@ Memory Manager - Karpathy LLM Wiki 模式
 """
 
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
@@ -59,7 +60,10 @@ LOG_PATH = WIKI_DIR / "log.md"
 
 WIKI_SECTIONS = [
     "综合评估",
+    "证据表",
     "五维打分",
+    "交易时机状态",
+    "与上次分析相比",
     "不对称原型",
     "分析时间线",
     "预测验证",
@@ -241,6 +245,12 @@ class MemoryManager:
 |------|----------|----------|------|----------|
 {eval_rows}
 
+## 证据表
+
+| 证据 | 类型 | 来源 | 可信度 | 影响维度 | 影响 | 备注 |
+|---|---|---|---|---|---|---|
+| 暂无结构化证据 | - | - | - | - | - | - |
+
 ## 五维打分
 
 | 维度 | 得分 | 子维度评分 | 更新时间 |
@@ -251,6 +261,14 @@ class MemoryManager:
 | 估值 | - | PSG:-, 同行溢价:-, 安全边际:- | - |
 | 团队/治理 | - | CEO:-, 董事会:-, 内部人:-, SBC:- | - |
 | **综合** | - | 判定:- | - |
+
+## 交易时机状态
+
+状态：暂无
+
+## 与上次分析相比
+
+（暂无历史对比）
 
 ## 不对称原型
 
@@ -421,17 +439,30 @@ class MemoryManager:
         score: float = 0,
         core_view: str = "",
         analysis_type: str = "综合分析",
+        research_score: float = None,
+        timing_state: str = "",
+        entry_trigger: str = "",
     ):
         """追加分析记录到时间线"""
         wiki = self.get_stock_wiki(stock_code)
         if not wiki:
             return
 
-        entry = (
-            f"- **{_now()}** | 价格: {price} | 评分: {score}/100 | "
-            f"类型: {analysis_type}\n"
-            f"  - 核心观点: {core_view}"
-        )
+        if research_score is not None or timing_state:
+            score_value = research_score if research_score is not None else score
+            entry = (
+                f"- **{_now()}** | 价格: {price} | Research: {score_value}/100 | "
+                f"Timing: {timing_state or '-'} | 类型: {analysis_type}\n"
+                f"  - 核心观点: {core_view}"
+            )
+            if entry_trigger:
+                entry += f"\n  - 触发条件: {entry_trigger}"
+        else:
+            entry = (
+                f"- **{_now()}** | 价格: {price} | 评分: {score}/100 | "
+                f"类型: {analysis_type}\n"
+                f"  - 核心观点: {core_view}"
+            )
 
         wiki = _append_to_section(wiki, "分析时间线", entry)
         _write_file(_stock_wiki_path(stock_code), wiki)
@@ -678,6 +709,32 @@ tags: {tags}
         wiki = _append_to_section(wiki, section_name, entry)
         _write_file(_stock_wiki_path(stock_code), wiki)
 
+    def replace_section(self, stock_code: str, section_name: str, content: str):
+        """替换 Wiki 的指定章节内容，不保留旧快照"""
+        wiki = _read_file(_stock_wiki_path(stock_code))
+        if not wiki:
+            return
+        wiki = _replace_section(wiki, section_name, content)
+        _write_file(_stock_wiki_path(stock_code), wiki)
+
+    def update_cockpit_sections(
+        self,
+        stock_code: str,
+        evidence_markdown: str = "",
+        research_score_markdown: str = "",
+        timing_markdown: str = "",
+        comparison_markdown: str = "",
+    ):
+        """更新 Cockpit 结构化章节"""
+        if evidence_markdown:
+            self.replace_section(stock_code, "证据表", evidence_markdown)
+        if research_score_markdown:
+            self.replace_section(stock_code, "五维打分", research_score_markdown)
+        if timing_markdown:
+            self.replace_section(stock_code, "交易时机状态", timing_markdown)
+        if comparison_markdown:
+            self.replace_section(stock_code, "与上次分析相比", comparison_markdown)
+
     def find_similar_analyses(
         self, stock_name: str, analysis_type: str = "", top_k: int = 5
     ) -> List[Dict]:
@@ -808,11 +865,7 @@ tags: {tags}
             if not timeline or timeline.startswith("（暂无"):
                 continue
 
-            scores = []
-            for line in timeline.split("\n"):
-                m = re.search(r"评分:\s*([\d.]+)", line)
-                if m:
-                    scores.append(float(m.group(1)))
+            scores = [record["score"] for record in self.get_analysis_history(stock_code=stock_code, limit=1000)]
 
             if scores:
                 all_scores.extend(scores)
@@ -961,10 +1014,11 @@ tags: {tags}
                 return []
 
             results = []
-            for line in timeline.split("\n"):
+            lines = timeline.split("\n")
+            for idx, line in enumerate(lines):
                 if not line.startswith("- **"):
                     continue
-                if "评分:" not in line:
+                if "评分:" not in line and "Research:" not in line:
                     continue
 
                 # 解析时间戳
@@ -973,14 +1027,22 @@ tags: {tags}
 
                 # 解析各字段
                 parts = line.split("|")
-                price_part = [p for p in parts if "价格:" in p]
                 score_part = [p for p in parts if "评分:" in p]
+                research_part = [p for p in parts if "Research:" in p]
+                timing_part = [p for p in parts if "Timing:" in p]
                 type_part = [p for p in parts if "类型:" in p]
 
                 score = 0.0
-                if score_part:
+                if research_part:
+                    num = re.search(r"([\d.]+)", research_part[0])
+                    score = float(num.group(1)) if num else 0.0
+                elif score_part:
                     num = re.search(r"([\d.]+)", score_part[0])
                     score = float(num.group(1)) if num else 0.0
+
+                timing_state = ""
+                if timing_part:
+                    timing_state = timing_part[0].replace("Timing:", "").strip()
 
                 atype = ""
                 if type_part:
@@ -991,9 +1053,7 @@ tags: {tags}
 
                 # 获取下一行作为核心观点
                 core_view = ""
-                lines = timeline.split("\n")
-                idx = lines.index(line) if line in lines else -1
-                if idx >= 0 and idx + 1 < len(lines):
+                if idx + 1 < len(lines):
                     next_line = lines[idx + 1].strip()
                     if next_line.startswith("- 核心观点:"):
                         core_view = next_line.replace("- 核心观点:", "").strip()
@@ -1005,6 +1065,8 @@ tags: {tags}
                     "stock_name": "",
                     "analysis_type": atype,
                     "score": score,
+                    "research_score": score,
+                    "timing_state": timing_state,
                     "result": core_view,
                     "input_data": {},
                 })
