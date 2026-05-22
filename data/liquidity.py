@@ -36,7 +36,7 @@ class LiquidityAnalyzer:
         if s.endswith(".US"):
             return s.replace(".US", "")
         if s.endswith(".HK"):
-            return s
+            return f"{s[:-3][-4:]}.HK"
         if s.startswith("SH"):
             return s[2:] + ".SS"
         if s.startswith("SZ"):

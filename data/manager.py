@@ -298,8 +298,7 @@ class DataManager:
         if not results:
             try:
                 import yfinance as yf
-                # YF 美股不需要 .US 后缀
-                yf_symbol = symbol.replace(".US", "")
+                yf_symbol = self._yf_symbol(symbol)
                 ticker = yf.Ticker(yf_symbol)
                 info = ticker.info
                 name = info.get("shortName") or info.get("longName") or symbol
@@ -449,9 +448,9 @@ class DataManager:
         # 美股: AAPL.US → AAPL
         if symbol.endswith(".US"):
             return symbol.replace(".US", "")
-        # 港股: 00700.HK → 00700.HK (YF 同格式)
+        # 港股: 长桥保留 5 位代码；Yahoo Finance 去掉前导 0
         if symbol.endswith(".HK"):
-            return symbol
+            return f"{symbol[:-3][-4:]}.HK"
         # A股: SH603906 → 603906.SS, SZ000001 → 000001.SZ
         if symbol.startswith("SH"):
             return symbol[2:] + ".SS"
