@@ -105,7 +105,7 @@ class StockSearchEngine:
         if symbol.endswith(".US"):
             return symbol.replace(".US", "")
         if symbol.endswith(".HK"):
-            return symbol
+            return f"{symbol[:-3][-4:]}.HK"
         if symbol.startswith("SH"):
             return symbol[2:] + ".SS"
         if symbol.startswith("SZ"):

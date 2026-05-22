@@ -1,17 +1,17 @@
 """
 Backtest runner - batch execution and memory integration
 """
-from __future__ import annotations
-
-import re
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
-
-from loguru import logger
-
-from data.manager import DataManager
-from memory.manager import MemoryManager
-from analyzer.base import AnalysisResult
+from __future__ import annotations
+
+import re
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+from loguru import logger
+
+from data.manager import DataManager
+from memory.manager import MemoryManager
+from analyzer.base import AnalysisResult
 from backtest.core import BacktestEngine, BacktestResult, SignalPerformance
 
 
@@ -79,15 +79,27 @@ class BacktestRunner:
             logger.warning(f"No wiki found for {ticker}")
             return results
 
-        # Extract timeline entries
-        timeline_pattern = re.compile(
-            r'- \*\*(\d{4}-\d{2}-\d{2}[^*]*)\*\*\s*\|\s*价格:\s*([\d.]+)\s*\|\s*评分:\s*([\d.]+)/100\s*\|\s*类型:\s*([^\n]*)\n\s+- 核心观点:\s*([^\n]*)',
-            re.MULTILINE
-        )
+        # Extract timeline entries (supports legacy score lines and new Research/Timing lines)
+        timeline_patterns = [
+            re.compile(
+                r'- \*\*(\d{4}-\d{2}-\d{2}[^*]*)\*\*\s*\|\s*价格:\s*([\d.]+)\s*\|\s*Research:\s*([\d.]+)/100\s*\|\s*Timing:\s*([^|\n]+)\s*\|\s*类型:\s*([^\n]*)\n\s+- 核心观点:\s*([^\n]*)',
+                re.MULTILINE,
+            ),
+            re.compile(
+                r'- \*\*(\d{4}-\d{2}-\d{2}[^*]*)\*\*\s*\|\s*价格:\s*([\d.]+)\s*\|\s*评分:\s*([\d.]+)/100\s*\|\s*类型:\s*([^\n]*)\n\s+- 核心观点:\s*([^\n]*)',
+                re.MULTILINE,
+            ),
+        ]
 
         cutoff = datetime.now() - timedelta(days=lookback_days)
 
-        for m in timeline_pattern.finditer(wiki):
+        matches = []
+        for pattern_index, pattern in enumerate(timeline_patterns):
+            for m in pattern.finditer(wiki):
+                matches.append((m.start(), pattern_index, m))
+        matches.sort(key=lambda x: x[0])
+
+        for _, pattern_index, m in matches:
             date_str = m.group(1).strip()[:10]  # YYYY-MM-DD
             try:
                 entry_dt = datetime.strptime(date_str, "%Y-%m-%d")
@@ -101,20 +113,29 @@ class BacktestRunner:
 
             price = float(m.group(2))
             score = float(m.group(3))
-            analysis_type = m.group(4).strip()
-            core_view = m.group(5).strip()
+            if pattern_index == 0:
+                timing_state = m.group(4).strip()
+                analysis_type = m.group(5).strip()
+                core_view = m.group(6).strip()
+            else:
+                timing_state = ""
+                analysis_type = m.group(4).strip()
+                core_view = m.group(5).strip()
 
             # Build a synthetic AnalysisResult
-            signals = self._extract_signals_from_text(core_view)
+            explicit_text = core_view
+            if timing_state == "Ready":
+                explicit_text = f"BUY {core_view}"
+            signals = self._extract_signals_from_text(explicit_text)
             if not signals:
-                signals = ["HOLD"]  # Default if no explicit signal
+                signals = ["HOLD"]
 
             result = AnalysisResult(
                 score=score,
                 summary=core_view,
                 signals=signals,
                 risks=[],
-                details={"price": price, "type": analysis_type}
+                details={"price": price, "type": analysis_type, "timing_state": timing_state}
             )
 
             bt = self.engine.backtest_analysis(ticker, result, date_str, days_after)
@@ -161,11 +182,11 @@ class BacktestRunner:
         """Extract BUY/SELL/HOLD signals from text"""
         signals = []
         upper = text.upper()
-        if any(w in upper for w in ["BUY", "LONG", "BULLISH", "ADD", "加仓", "买入", "做多"]):
+        if any(w in upper for w in ["BUY", "LONG", "BULLISH", "ADD", "READY", "加仓", "买入", "做多"]):
             signals.append("BUY")
         if any(w in upper for w in ["SELL", "SHORT", "BEARISH", "EXIT", "减仓", "卖出", "做空"]):
             signals.append("SELL")
-        if any(w in upper for w in ["HOLD", "NEUTRAL", "WAIT", "观望", "持有"]):
+        if any(w in upper for w in ["HOLD", "WAIT", "WATCH", "NEUTRAL", "观望", "持有"]):
             signals.append("HOLD")
         return signals
 

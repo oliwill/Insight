@@ -52,6 +52,8 @@ class CorrelationAnalyzer:
         s = symbol.upper()
         if s.endswith(".US"):
             return s.replace(".US", "")
+        if s.endswith(".HK"):
+            return f"{s[:-3][-4:]}.HK"
         return s
 
     def find_peers(self, symbol: str, top_n: int = 5, use_calculated: bool = True) -> List[Dict]:

@@ -33,6 +33,8 @@ class ETFAnalyzer:
         s = symbol.upper()
         if s.endswith(".US"):
             return s.replace(".US", "")
+        if s.endswith(".HK"):
+            return f"{s[:-3][-4:]}.HK"
         return s
 
     def is_etf(self, symbol: str) -> bool:
