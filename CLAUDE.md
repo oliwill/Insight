@@ -153,7 +153,7 @@ New stock wikis created by `MemoryManager.init_stock_wiki()` contain:
 - `## 期权市场`
 - `## 内部人信号`
 - `## SBC与稀释`
-- `## KOL观点汇总`
+- `## KOL 观点汇总`
 - `## 社交情绪`
 - `## 研究笔记`
 - `## 交叉引用`

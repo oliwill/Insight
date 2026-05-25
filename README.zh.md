@@ -105,20 +105,26 @@ vault/
 
 ## 分析输出结构
 
-每只股票 wiki 初始化后包含这些核心 section：
+每只股票 wiki 初始化后包含 `memory.manager.WIKI_SECTIONS` 定义的标准 section：
 
-| Section | 写入模块 |
+| Section | 主要用途 / 写入模块 |
 |---|---|
 | `综合评估` | `MemoryManager.update_evaluation_table()` |
 | `证据表` | `EvidenceExtractor` + `update_cockpit_sections()` |
 | `五维打分` | `ResearchScoreEngine` |
 | `交易时机状态` | `TimingEngine` |
 | `与上次分析相比` | `scripts/analyze_stock.py` 对比 helper |
+| `不对称原型` | 非对称赔率分类 |
 | `分析时间线` | `MemoryManager.append_to_timeline()` |
 | `预测验证` | `BacktestRunner` / `ReviewScheduler` |
+| `关键事件` | 催化剂与事件记录 |
 | `财报预期` | `data.earnings.EarningsCalendar` |
+| `财报前情景预判` | 财报前三情景预判 |
 | `流动性分析` | `data.liquidity.LiquidityAnalyzer` |
 | `期权市场` | `data.options.OptionsAnalyzer` |
+| `内部人信号` | 内部人交易上下文 |
+| `SBC与稀释` | 股权激励与稀释检查 |
+| `KOL 观点汇总` | 具名 KOL / 社交观点 |
 | `社交情绪` | `data.search.StockSearchEngine` + `SentimentAnalyzer` |
 | `研究笔记` | `ReportGenerator` 完整 Markdown 报告 |
 | `交叉引用` | `data.correlation.CorrelationAnalyzer` |

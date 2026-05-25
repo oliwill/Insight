@@ -123,18 +123,24 @@ Thresholds: ≥75 高信心 / 60–75 标准建仓候选 / 45–60 观察 / <45 
 
 ## Wiki Sections
 
-New stock wikis created by `MemoryManager.init_stock_wiki()` contain structured sections including:
+New stock wikis created by `MemoryManager.init_stock_wiki()` contain structured sections from `memory.manager.WIKI_SECTIONS`, including:
 
 - `## 综合评估`
 - `## 证据表`
 - `## 五维打分`
 - `## 交易时机状态`
 - `## 与上次分析相比`
+- `## 不对称原型`
 - `## 分析时间线`
 - `## 预测验证`
+- `## 关键事件`
 - `## 财报预期`
+- `## 财报前情景预判`
 - `## 流动性分析`
 - `## 期权市场`
+- `## 内部人信号`
+- `## SBC与稀释`
+- `## KOL 观点汇总`
 - `## 社交情绪`
 - `## 研究笔记`
 - `## 交叉引用`

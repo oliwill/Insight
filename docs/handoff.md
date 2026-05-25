@@ -25,6 +25,7 @@ Status date: 2026-05-22
 ## Current Contracts
 
 - Stock wiki filenames must use underscores: `AAPL.US` → `AAPL_US.md`.
+- New stock wikis use the standard `memory.manager.WIKI_SECTIONS` set; keep docs and tests aligned when adding or renaming sections.
 - `Research Score` measures thesis/company quality.
 - `Timing State` measures entry quality and must remain separate from Research Score.
 - Cockpit sections are replaced on each analysis: `证据表`, `五维打分`, `交易时机状态`, `与上次分析相比`.

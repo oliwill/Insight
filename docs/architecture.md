@@ -119,7 +119,7 @@ Output states:
 
 ## Wiki Persistence Model
 
-`MemoryManager.init_stock_wiki()` creates a stock page with structured sections. Current Cockpit sections are replaced on each analysis:
+`MemoryManager.init_stock_wiki()` creates a stock page with the standard `memory.manager.WIKI_SECTIONS` structure, including evaluation, Cockpit, event, earnings, liquidity, options, insider, SBC/dilution, KOL, sentiment, notes, cross-reference and material-index sections. Current Cockpit sections are replaced on each analysis:
 
 - `证据表`
 - `五维打分`
