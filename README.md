@@ -50,6 +50,16 @@ ANALYSIS_TIMEOUT=30
 
 Optional integrations are documented in `.env.example`: Longbridge, NewsAPI, Telegram bot, Inbox watcher folders, Podwise, and scheduler cron strings.
 
+## Verify Installation
+
+```bash
+# Core regression checks for scoring, Obsidian writeback, symbol mapping and backtest parsing
+python -m pytest tests/test_core_scoring.py tests/test_section_write.py tests/test_yahoo_symbol.py tests/test_backtest_timeline.py tests/test_data_manager_env.py -v
+
+# Import smoke check for the main Cockpit/writeback modules
+python -c "from input.evidence import EvidenceExtractor; from analyzer.research_score import ResearchScoreEngine; from analyzer.timing_engine import TimingEngine; from run_analysis import write_analysis_to_obsidian; print('core/writeback imports ok')"
+```
+
 ## Commands
 
 ```bash
@@ -105,20 +115,26 @@ Ticker normalization keeps canonical internal symbols while adapting to each dat
 
 ## Analysis Output
 
-Each stock wiki is initialized with these core sections:
+Each stock wiki is initialized with the standard sections defined by `memory.manager.WIKI_SECTIONS`:
 
-| Section | Updated by |
+| Section | Primary use / writer |
 |---|---|
 | `综合评估` | `MemoryManager.update_evaluation_table()` |
 | `证据表` | `EvidenceExtractor` + `update_cockpit_sections()` |
 | `五维打分` | `ResearchScoreEngine` |
 | `交易时机状态` | `TimingEngine` |
 | `与上次分析相比` | `scripts/analyze_stock.py` comparison helper |
+| `不对称原型` | asymmetric payoff classification |
 | `分析时间线` | `MemoryManager.append_to_timeline()` |
 | `预测验证` | `BacktestRunner` / `ReviewScheduler` |
+| `关键事件` | catalyst and event notes |
 | `财报预期` | `data.earnings.EarningsCalendar` |
+| `财报前情景预判` | pre-earnings scenario notes |
 | `流动性分析` | `data.liquidity.LiquidityAnalyzer` |
 | `期权市场` | `data.options.OptionsAnalyzer` |
+| `内部人信号` | insider-trading context |
+| `SBC与稀释` | stock-based compensation and dilution checks |
+| `KOL 观点汇总` | named KOL/social notes |
 | `社交情绪` | `data.search.StockSearchEngine` + `SentimentAnalyzer` |
 | `研究笔记` | `ReportGenerator` full Markdown report |
 | `交叉引用` | `data.correlation.CorrelationAnalyzer` |
@@ -170,10 +186,13 @@ The pipeline is fault-tolerant: failed modules return `*_error` fields and the r
 | `analyzer.report_generator` | final Markdown report generation |
 | `memory.manager` | Obsidian wiki, Materials, timeline, dashboard persistence |
 | `backtest.runner` / `backtest.review` | timeline signal verification and review reports |
+| `backtest.framework_analyzer` | weekly review aggregation and framework suggestions |
 | `trader_mcp.py` | MCP server for Claude Desktop / MCP clients |
 | `telegram_bot.py` | optional mobile command interface |
 | `inbox_watcher.py` | optional folder watcher that triggers Inbox scans |
 | `scripts/podwise_sync.py` | optional Podcast note import into Obsidian |
+
+Weekly review writes `Analysis/复盘_YYYYMMDD.md` and creates a `Tasks/` reminder for reviewing framework suggestions.
 
 ## More Documentation
 
@@ -181,6 +200,7 @@ The pipeline is fault-tolerant: failed modules return `*_error` fields and the r
 - `docs/integration-guide.md` — MCP, Telegram, Inbox and Podwise integration steps
 - `docs/runbook.md` — operations, scheduling, verification and troubleshooting
 - `docs/handoff.md` — current handoff snapshot for new agents and maintainers
+- `AGENTS.md` — compact coding-agent operating guide
 - `MCP_CONFIG.md` — MCP server configuration reference
 - `SCHEDULER.md` — scheduler notes
 
