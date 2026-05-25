@@ -14,6 +14,9 @@ __all__ = [
     "ResearchDimensionScore",
     "TimingEngine",
     "TimingState",
+    "ReportQualityEvaluator",
+    "ReportQualityResult",
+    "ReportQualityIssue",
 ]
 
 
@@ -48,4 +51,11 @@ def __getattr__(name):
     if name in {"TimingEngine", "TimingState"}:
         from .timing_engine import TimingEngine, TimingState
         return {"TimingEngine": TimingEngine, "TimingState": TimingState}[name]
+    if name in {"ReportQualityEvaluator", "ReportQualityResult", "ReportQualityIssue"}:
+        from .report_quality import ReportQualityEvaluator, ReportQualityResult, ReportQualityIssue
+        return {
+            "ReportQualityEvaluator": ReportQualityEvaluator,
+            "ReportQualityResult": ReportQualityResult,
+            "ReportQualityIssue": ReportQualityIssue,
+        }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

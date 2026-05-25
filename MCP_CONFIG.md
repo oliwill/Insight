@@ -1,36 +1,34 @@
 # MCP 配置说明
 
-## 步骤 1：安装依赖
+`trader_mcp.py` exposes the trader-obsidian workspace to MCP clients such as Claude Desktop. The server is read/write for the local Obsidian vault: it can scan Inbox, fetch analysis context, write analysis text, create task files, and update Dashboard.
+
+## 1. Install Dependencies
 
 ```bash
-cd C:/Users/Lzw/alma/worktrees/trader/trader-obsidian
-pip install mcp
+cd /path/to/obsidiantrader
+pip install -r requirements.txt
 ```
 
-## 步骤 2：配置 Claude Desktop
+Required for MCP: `mcp>=1.0.0`, plus this project’s normal dependencies.
 
-打开 Claude Desktop，进入 Settings → MCP Servers，添加新服务器：
+## 2. Configure `.env`
 
-### 方式 A：通过 UI 配置
+At minimum:
 
-在 Claude Desktop 中：
-1. 点击 "+" 添加 MCP Server
-2. 选择 "Command" 类型
-3. 填写：
-   - **Name**: `trader-obsidian`
-   - **Command**: `python`
-   - **Arguments**:
-     ```
-     C:/Users/Lzw/alma/worktrees/trader/trader-obsidian/trader_mcp.py
-     ```
-   - **Environment**:
-     ```
-     PYTHONPATH=C:/Users/Lzw/alma/worksects/trader/trader-obsidian
-     ```
+```env
+WIKI_BASE_DIR=/path/to/your/obsidian/vault/4_Trader
+WIKI_SUBDIR=Analysis
+MATERIALS_SUBDIR=Materials
+OBSIDIAN_INBOX_DIR=/path/to/your/obsidian/vault/Inbox
+OBSIDIAN_TASKS_DIR=/path/to/your/obsidian/vault/Tasks
+OBSIDIAN_DASHBOARD_PATH=/path/to/your/obsidian/vault/Dashboard.md
+```
 
-### 方式 B：直接编辑配置文件
+## 3. Configure Claude Desktop
 
-在 Claude Desktop 的配置目录中找到 MCP 配置文件（通常在 `C:/Users/<用户>/AppData/Roaming/Claude/claude_desktop_config.json`），添加：
+Use absolute paths for both the script and `PYTHONPATH`.
+
+### Windows example
 
 ```json
 {
@@ -38,61 +36,79 @@ pip install mcp
     "trader-obsidian": {
       "command": "python",
       "args": [
-        "C:\\Users\\Lzw\\alma\\worktrees\\trader\\trader-obsidian\\trader_mcp.py"
+        "E:\\Git\\ClaudeCode\\obsidiantrader\\trader_mcp.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Users\\Lzw\\alma\\worktrees\\trader\\trader-obsidian"
+        "PYTHONPATH": "E:\\Git\\ClaudeCode\\obsidiantrader"
       }
     }
   }
 }
 ```
 
-**注意路径分隔符**：
-- Windows 配置文件中使用 `\\` 双反斜杠
-- 或使用 `/` 单斜杠（JSON 中也支持）
+### macOS / Linux example
 
-## 步骤 3：验证配置
-
-重启 Claude Desktop 后，在聊天界面中测试：
-
+```json
+{
+  "mcpServers": {
+    "trader-obsidian": {
+      "command": "python3",
+      "args": [
+        "/path/to/obsidiantrader/trader_mcp.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/path/to/obsidiantrader"
+      }
+    }
+  }
+}
 ```
+
+## 4. Verify
+
+Restart the MCP client, then ask:
+
+```text
 请列出 Inbox 中的所有材料
 ```
 
-```
-获取 AAPL 的分析上下文
+```text
+获取 AAPL.US 的分析上下文
 ```
 
-```
+```text
 扫描待处理的材料
 ```
 
-如果 Claude 能正确返回结果，说明 MCP 配置成功。
+If the client can call the tools and returns JSON/Markdown, the server is configured.
 
----
+## Tools
 
-## 可用工具列表
+| Tool | Function | Parameters |
+|---|---|---|
+| `scan_inbox_tool` | Scan Inbox and return all materials | none |
+| `get_pending_analysis_tool` | Return unprocessed `analyze: true` materials | none |
+| `get_related_materials_tool` | Return Inbox materials related to a stock | `stock_code` |
+| `get_stock_context_tool` | Return full stock wiki context | `stock_code` |
+| `get_stock_index_tool` | Return `Analysis/index.md` content | none |
+| `get_recent_log_tool` | Return recent MemoryManager log entries | `n` optional |
+| `analyze_stock_tool` | Fetch pipeline data; does not write report | `stock_code` |
+| `write_analysis_tool` | Append analysis text to Obsidian | `stock_code`, `stock_name`, `analysis_text`, `score`, `core_view` |
+| `create_task_tool` | Create an Obsidian task file | `title`, `ticker`, `task_type`, `description`, `priority`, `due_date` |
+| `update_dashboard_tool` | Rebuild Dashboard.md | none |
+| `search_stock_news_tool` | Search latest stock news | `stock_code`, `max_results` optional |
+| `search_stock_sentiment_tool` | Search social/sentiment material | `stock_code`, `max_results` optional |
+| `search_stock_all_tool` | Search news + social + analyst material | `stock_code` |
 
-配置成功后，在 Claude Desktop 或 claudian 中可以使用这些工具：
+## Resources
 
-| 工具名 | 功能 | 参数 |
-|--------|------|------|
-| `scan_inbox_tool` | 扫描 Inbox | 无 |
-| `get_pending_analysis_tool` | 获取待处理材料 | 无 |
-| `get_related_materials_tool` | 获取相关材料 | stock_code |
-| `get_stock_context_tool` | 获取 Wiki 上下文 | stock_code |
-| `get_stock_index_tool` | 获取股票总览 | 无 |
-| `get_recent_log_tool` | 获取最近日志 | n (可选，默认5) |
-| `analyze_stock_tool` | 触发分析（获取数据 + 网络搜索） | stock_code |
-| `search_stock_news_tool` | 搜索股票最新新闻 | stock_code, max_results (可选) |
-| `search_stock_sentiment_tool` | 搜索社交媒体情绪 | stock_code, max_results (可选) |
-| `search_stock_all_tool` | 综合搜索（新闻+社交+研报） | stock_code |
-| `write_analysis_tool` | 写入分析结果 | stock_code, stock_name, analysis_text, score, core_view |
-| `create_task_tool` | 创建任务 | title, ticker, task_type, description, priority, due_date |
-| `update_dashboard_tool` | 更新 Dashboard | 无 |
+| Resource | Content |
+|---|---|
+| `mcp://trader/inbox` | Inbox overview and pending count |
+| `mcp://trader/stocks` | Tracked stock index |
 
-## 资源列表
+## Notes
 
-- `mcp://trader/inbox` — Inbox 概览
-- `mcp://trader/stocks` — 股票总览
+- `analyze_stock_tool` only returns data. The client still needs to reason over the data and call `write_analysis_tool` if it wants to persist a report.
+- For a full local Cockpit report, prefer `python scripts/analyze_stock.py <TICKER>` outside MCP.
+- `write_analysis_tool` uses `run_analysis.write_analysis_to_obsidian()` and therefore follows the underscore filename rule through `MemoryManager`.

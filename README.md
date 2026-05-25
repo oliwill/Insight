@@ -2,69 +2,30 @@
 
 English | [简体中文](README.zh.md)
 
-A stock analysis system that uses Claude Code as the execution engine and Obsidian as the knowledge base. Drop research materials into an Inbox folder, run an analysis command, and get a structured deep-dive written directly into your Obsidian vault.
+A stock analysis system that uses Claude Code as the reasoning engine and Obsidian as the durable research workspace. It collects market data, extracts evidence from your vault, separates company-quality scoring from trade timing, and writes structured analysis back to Markdown files.
 
-## How It Works
+## Workflow
 
 ```
 Inbox / Materials / stock wiki
     ↓
-input.evidence.EvidenceExtractor
+data.analysis_pipeline.generate_analysis()
     ↓
-analyzer.research_score.ResearchScoreEngine
+EvidenceExtractor → ResearchScoreEngine → TimingEngine
     ↓
-analyzer.timing_engine.TimingEngine
+ReportGenerator + MemoryManager
     ↓
-analyzer.report_generator.ReportGenerator
-    ↓
-run_analysis.write_analysis_to_obsidian
-    ↓
-Obsidian vault (Analysis wiki + Materials + Dashboard)
+Obsidian Analysis wiki + Dashboard + Tasks
 ```
 
-1. Drop a Substack article, Twitter thread, or research note into `Inbox/`
-2. Run `python run_analysis.py --scan` or `python run_analysis.py AAPL`
-3. Claude Code fetches market data, extracts evidence, computes research score/timing state, and writes structured cockpit sections directly to your Obsidian `.md` files
+Core distinction:
 
-No Obsidian plugins required. Plain markdown files, synced via Dropbox/iCloud/remotely-save.
-
-## Analysis Framework
-
-Each analysis produces a structured report with these sections:
-
-| Section | Content |
-|---|---|
-| A. 公司与催化剂 | Business description + recent catalysts + supply chain positioning |
-| B. 技术面 | RSI/MACD/Bollinger + **SEPA Stage analysis** (trend template + VCP) |
-| B2. 护城河 | Moat rating per dimension + competitive gap quantification |
-| C. 基本面 | Financials + growth trajectory + **growth quality** (customer concentration, geo exposure, SBC) |
-| D. 估值 | P/S + PSG + peer table + **reverse valuation** + asymmetric bet archetype |
-| E. 市场结构 | Short interest + IV + **GEX** + options flow + structured sentiment |
-| F. 风险量化 | 3–5 risks with revenue/valuation impact + probability |
-| G. 三情景目标价 | Bull/Base/Bear with probability-weighted 12m target |
-| H. 操作格网 | Entry grid by price level with position sizing |
-| I. 警戒线/加仓信号 | Observable boolean conditions only |
-| J. 催化剂日历 | Date × event × upside/downside scenario |
-
-### Scoring — Five-Dimension Framework
-
-| Dimension | Weight | Key Data Source |
+| Layer | Purpose | Output |
 |---|---|---|
-| 行业/TAM | 20% | `stock-correlation` + `finance-sentiment` |
-| 护城河 | 20% | `funda-data` supply chain + `stock-correlation` peers |
-| 增长质量 | 20% | `yfinance-data` + `funda-data` SEC filings |
-| 估值 | 25% | `funda-data` analyst estimates + peer multiples |
-| 团队 | 15% | `funda-data` insider trades + congressional trades |
-
-Thresholds: ≥75 high-conviction / 60–75 standard / 45–60 watch / <45 pass
-
-### PSG Framework
-
-`PSG = P/S ÷ Revenue Growth%`
-
-- PSG < 1 → reasonable
-- PSG 1–2 → elevated
-- PSG > 2 → extreme overvaluation
+| Evidence | Convert wiki, Materials and Inbox snippets into typed claims | `## 证据表` |
+| Research Score | Five-dimension company/thesis quality score | `## 五维打分` |
+| Timing State | Entry quality state machine independent from research quality | `Ready / Wait / Watch / Avoid` |
+| Backtest | Verify historical timeline signals after a holding window | `## 预测验证` + `output/review_*` |
 
 ## Quick Start
 
@@ -72,178 +33,176 @@ Thresholds: ≥75 high-conviction / 60–75 standard / 45–60 watch / <45 pass
 git clone https://github.com/oliwill/obsidiantrader.git
 cd obsidiantrader
 pip install -r requirements.txt
-cp .env.example .env   # fill in your paths and optional API keys
+cp .env.example .env
 ```
 
-Configure `.env`:
+Minimal `.env`:
 
 ```env
-WIKI_BASE_DIR=/path/to/your/obsidian/vault
-WIKI_SUBDIR=4_Trader/Analysis
-MATERIALS_SUBDIR=4_Trader/Materials
+WIKI_BASE_DIR=/path/to/your/obsidian/vault/4_Trader
+WIKI_SUBDIR=Analysis
+MATERIALS_SUBDIR=Materials
 OBSIDIAN_INBOX_DIR=/path/to/your/obsidian/vault/Inbox
-OBSIDIAN_TASKS_DIR=/path/to/your/obsidian/vault/4_Trader/Tasks
+OBSIDIAN_TASKS_DIR=/path/to/your/obsidian/vault/Tasks
 OBSIDIAN_DASHBOARD_PATH=/path/to/your/obsidian/vault/Dashboard.md
 ANALYSIS_TIMEOUT=30
+```
 
-# Optional — falls back to Yahoo Finance if missing
-LONGBRIDGE_APP_KEY=
-LONGBRIDGE_APP_SECRET=
-LONGBRIDGE_ACCESS_TOKEN=
+Optional integrations are documented in `.env.example`: Longbridge, NewsAPI, Telegram bot, Inbox watcher folders, Podwise, and scheduler cron strings.
+
+## Verify Installation
+
+```bash
+# Core regression checks for scoring, Obsidian writeback, symbol mapping and backtest parsing
+python -m pytest tests/test_core_scoring.py tests/test_section_write.py tests/test_yahoo_symbol.py tests/test_backtest_timeline.py tests/test_data_manager_env.py -v
+
+# Import smoke check for the main Cockpit/writeback modules
+python -c "from input.evidence import EvidenceExtractor; from analyzer.research_score import ResearchScoreEngine; from analyzer.timing_engine import TimingEngine; from run_analysis import write_analysis_to_obsidian; print('core/writeback imports ok')"
 ```
 
 ## Commands
 
 ```bash
-# Quick analysis (recommended) - generates formatted report and writes to Obsidian
-python scripts/analyze_stock.py AAPL        # US stock
-python scripts/analyze_stock.py 00700       # HK stock (auto-normalized to 00700.HK)
-python scripts/analyze_stock.py 603906      # A-share (auto-normalized to SH603906)
+# One-click Cockpit analysis; writes directly to Obsidian
+python scripts/analyze_stock.py AAPL
+python scripts/analyze_stock.py 00700
+python scripts/analyze_stock.py 603906
 
-# Full analysis workflow (Claude Code orchestration)
-python run_analysis.py AAPL        # Outputs JSON for Claude Code analysis
-python run_analysis.py --scan     # Process all pending Inbox items
-python run_analysis.py --dashboard  # Rebuild Dashboard only
-python run_analysis.py --inbox     # Show Inbox status
+# Claude Code orchestration data fetch
+python run_analysis.py AAPL
+python run_analysis.py --scan
+python run_analysis.py --dashboard
+python run_analysis.py --inbox
+
+# Scheduled-task entry points
+python scripts/scan_inbox.py --dry-run --json
+python scripts/run_review.py --days-after 30 --lookback 90
+python scripts/update_dashboard.py --json
+python scripts/weekly_review.py --json
+
+# Optional utilities
+python inbox_watcher.py
+python telegram_bot.py --polling
+python scripts/podwise_sync.py --list
+python scripts/backtest_raycat.py
+python trader_mcp.py
 ```
 
-## Obsidian Vault Structure
+## Obsidian Structure
+
+Recommended layout:
 
 ```
 vault/
-├── Inbox/              ← drop materials here
-│   └── NVDA_note.md
-├── 4_Trader/           ← adjust prefix to match your vault numbering
-│   ├── Analysis/       ← auto-managed stock wikis + weekly review reports
-│   │   ├── AAPL_US.md
-│   │   └── 复盘_20260510.md
-│   ├── Materials/      ← raw material archives per stock
-│   │   └── TSLA_US/
-│   ├── Charts/         ← auto-generated Wyckoff charts
-│   └── Tasks/          ← auto-created trade/research tasks
-└── Dashboard.md        ← portfolio overview, auto-updated
+├── Inbox/                 # user drops source notes here
+├── Tasks/                 # task files created by write_task()
+├── Dashboard.md           # portfolio/research dashboard
+└── 4_Trader/
+    ├── Analysis/          # stock wiki pages: AAPL_US.md
+    ├── Materials/         # archived materials per stock
+    └── Charts/            # generated Wyckoff charts
 ```
 
-> **Note**: The `4_Trader/` prefix matches a typical Obsidian folder-numbered vault. Set `WIKI_SUBDIR` and `MATERIALS_SUBDIR` in `.env` to match your actual structure.
+File naming rule: `.` and `/` in stock codes are replaced by `_`.
 
-## Inbox Material Format
-
-Create a `.md` file in `Inbox/` with YAML frontmatter:
-
-```yaml
----
-title: NVDA Q1 earnings beat
-source: twitter          # twitter | substack | wechat | pdf | note
-ticker: NVDA
-analyze: true
-tags: AI, semiconductors, datacenter
----
-
-Paste the content here...
-```
-
-After processing, `processed: true` and `processed_at` are appended automatically.
-
-## Project Structure
-
-```
-trader-obsidian/
-├── run_analysis.py       # main entry point (Claude Code orchestration)
-├── scripts/
-│   └── analyze_stock.py  # one-click analysis with formatted report
-├── analyzer/
-│   ├── research_score.py # five-dimension thesis/company quality scoring
-│   ├── timing_engine.py  # Ready/Wait/Watch/Avoid timing state machine
-│   ├── report_generator.py  # unified report formatting (tables + emojis)
-│   ├── fundamental.py    # fundamental analysis + 6-dimension moat scoring
-│   ├── trading_grid.py   # Fibonacci levels, ATR stops, R/R ratios
-│   ├── wyckoff.py        # Wyckoff phase detection
-│   ├── wyckoff_chart.py  # Wyckoff chart visualization (price, MA, zones, phases)
-│   └── comprehensive.py  # combined scoring
-├── data/
-│   ├── analysis_pipeline.py  # complete data pipeline
-│   ├── manager.py        # DataManager: Longbridge API + Yahoo Finance fallback
-│   ├── sentiment_analyzer.py  # sentiment scoring: news, social, fear/greed
-│   ├── earnings.py       # earnings calendar + surprise history
-│   ├── options.py        # options chain: IV, GEX, unusual activity
-│   ├── liquidity.py      # short interest, ADTV, market impact
-│   └── correlation.py    # peer correlation matrix
-├── memory/
-│   ├── manager.py        # MemoryManager: wiki read/write, timeline, materials
-│   ├── utils.py          # paths, dates, file I/O helpers
-│   └── section_parser.py # Markdown section parsing/replacement
-├── input/
-│   ├── evidence.py       # typed evidence extraction from wiki/materials/Inbox
-│   └── ingest.py         # material intake with tag indexing
-├── inbox_scanner.py      # scans Inbox/ for pending analysis
-├── skills/               # agent workflow checklists (think/check/hunt/learn)
-└── backtest/
-    ├── core.py           # BacktestEngine, BacktestResult, SignalPerformance
-    ├── runner.py         # BacktestRunner: batch execution + wiki integration
-    ├── review.py         # ReviewScheduler: daily review pipeline
-    ├── framework_analyzer.py  # FrameworkAnalyzer: pattern analysis + framework suggestions
-    └── report.py         # ReportGenerator: markdown/CSV/chart outputs
-```
-
-## Core Scoring and Timing
-
-The reusable analysis kernel separates company quality from entry timing:
-
-| Module | Responsibility |
+| Stock code | Wiki file |
 |---|---|
-| `input.evidence` | Convert wiki, Materials and Inbox snippets into typed evidence claims |
-| `analyzer.research_score` | Produce base and evidence-adjusted five-dimension Research Score |
-| `analyzer.timing_engine` | Produce a separate Ready/Wait/Watch/Avoid timing state |
-| `run_analysis.write_analysis_to_obsidian` | Write evidence, score, timing, comparison, timeline and research-note sections into Obsidian without duplicate top-level headings |
+| `TEM.US` | `TEM_US.md` |
+| `600487.SH` | `600487_SH.md` |
+| `00100.HK` | `00100_HK.md` |
 
-Timeline/history consumers support both legacy `评分:` rows and cockpit `Research:` / `Timing:` rows, so backtests and learning stats remain compatible across report formats.
+Ticker normalization keeps canonical internal symbols while adapting to each data source. For Yahoo-backed modules, 5-digit HK symbols are converted to Yahoo's 4-digit `.HK` format: `03986.HK` → `3986.HK`, `00700.HK` → `0700.HK`, `00388.HK` → `0388.HK`. Tests in `tests/test_yahoo_symbol.py` guard these examples.
+
+## Analysis Output
+
+Each stock wiki is initialized with the standard sections defined by `memory.manager.WIKI_SECTIONS`:
+
+| Section | Primary use / writer |
+|---|---|
+| `综合评估` | `MemoryManager.update_evaluation_table()` |
+| `证据表` | `EvidenceExtractor` + `update_cockpit_sections()` |
+| `五维打分` | `ResearchScoreEngine` |
+| `交易时机状态` | `TimingEngine` |
+| `与上次分析相比` | `scripts/analyze_stock.py` comparison helper |
+| `不对称原型` | asymmetric payoff classification |
+| `分析时间线` | `MemoryManager.append_to_timeline()` |
+| `预测验证` | `BacktestRunner` / `ReviewScheduler` |
+| `关键事件` | catalyst and event notes |
+| `财报预期` | `data.earnings.EarningsCalendar` |
+| `财报前情景预判` | pre-earnings scenario notes |
+| `流动性分析` | `data.liquidity.LiquidityAnalyzer` |
+| `期权市场` | `data.options.OptionsAnalyzer` |
+| `内部人信号` | insider-trading context |
+| `SBC与稀释` | stock-based compensation and dilution checks |
+| `KOL 观点汇总` | named KOL/social notes |
+| `社交情绪` | `data.search.StockSearchEngine` + `SentimentAnalyzer` |
+| `研究笔记` | `ReportGenerator` full Markdown report |
+| `交叉引用` | `data.correlation.CorrelationAnalyzer` |
+| `资料索引` | `MemoryManager.save_material()` |
+
+## Scoring Framework
+
+`ResearchScoreEngine` implements the five-dimension framework:
+
+| Dimension | Weight | Main inputs |
+|---|---:|---|
+| 行业/TAM | 20% | sector, peers, search/social signals |
+| 护城河 | 20% | moat analysis, margins, peer context |
+| 增长质量 | 20% | revenue growth, earnings growth, margins, FCF |
+| 估值 | 25% | P/S, PSG, forward PE, analyst target |
+| 团队/治理 | 15% | insider ownership/signal, SBC pressure |
+
+Thresholds: ≥75 high-conviction / 60–75 standard candidate / 45–60 watch / <45 pass.
+
+`TimingEngine` then produces a separate trade-timing state:
+
+| State | Meaning |
+|---|---|
+| `Ready` | actionable setup if position sizing is acceptable |
+| `Wait` | thesis may be valid, but entry trigger is missing |
+| `Watch` | low-confidence setup; monitor only or tiny probe |
+| `Avoid` | research quality or timing risk is too poor |
 
 ## Data Sources
 
-| Source | Used For | Requires |
+| Source | Used for | Requirement |
 |---|---|---|
-| Yahoo Finance | Fundamentals, history, options, earnings | Nothing (default) |
-| Longbridge API | Real-time quotes, HK/CN stocks, K-lines | `pip3 install longbridge` + API credentials in `.env` |
+| Yahoo Finance | price history, fundamentals, options, earnings, news | default |
+| DuckDuckGo HTML | web/social fallback search | default |
+| NewsAPI | news enrichment | `NEWSAPI_KEY` |
+| Longbridge | HK/CN quotes and K-lines | Longbridge credentials |
+| Obsidian vault | prior theses, materials, Inbox evidence | `.env` paths |
 
-The system silently falls back to Yahoo Finance if Longbridge credentials are absent or the API times out. Get credentials at [open.longportapp.com](https://open.longportapp.com/).
+The pipeline is fault-tolerant: failed modules return `*_error` fields and the rest of the report can still be generated.
 
-## Skills (Agent Workflows)
+## Module Map
 
-The `skills/` directory contains structured checklists that guide Claude Code through each workflow phase:
-
-| Skill | Purpose |
+| Module | Purpose |
 |---|---|
-| `think/` | Pre-analysis: goal setting, method selection, 5-dimension scoring guide |
-| `check/` | Post-analysis: logic verification, anomaly detection, completeness checklist |
-| `hunt/` | Debugging: systematic issue resolution |
-| `learn/` | Pattern extraction from accumulated analyses |
-| `backtest/` | Signal validation: entry/exit vs historical price |
+| `data.analysis_pipeline` | one-call data collection and technical calculations |
+| `analyzer.research_score` | evidence-adjusted five-dimension scoring |
+| `analyzer.timing_engine` | Ready/Wait/Watch/Avoid timing state machine |
+| `input.evidence` | rule-based evidence extraction from wiki/materials/Inbox |
+| `analyzer.report_generator` | final Markdown report generation |
+| `memory.manager` | Obsidian wiki, Materials, timeline, dashboard persistence |
+| `backtest.runner` / `backtest.review` | timeline signal verification and review reports |
+| `backtest.framework_analyzer` | weekly review aggregation and framework suggestions |
+| `trader_mcp.py` | MCP server for Claude Desktop / MCP clients |
+| `telegram_bot.py` | optional mobile command interface |
+| `inbox_watcher.py` | optional folder watcher that triggers Inbox scans |
+| `scripts/podwise_sync.py` | optional Podcast note import into Obsidian |
 
-## Symbol Normalization
+Weekly review writes `Analysis/复盘_YYYYMMDD.md` and creates a `Tasks/` reminder for reviewing framework suggestions.
 
-| Input | Internal Code | Market | Yahoo Finance Code |
-|---|---|---|---|
-| `AAPL` | `AAPL.US` | US | `AAPL` |
-| `00700` | `00700.HK` | HK | `0700.HK` |
-| `03986.HK` | `03986.HK` | HK | `3986.HK` |
-| `603906` | `SH603906` | CN Shanghai | `603906.SS` |
-| `000001` | `SZ000001` | CN Shenzhen | `000001.SZ` |
+## More Documentation
 
-`DataManager.normalize_symbol()` handles the canonical internal code. Yahoo-backed helpers convert HK symbols to Yahoo's four-digit `.HK` form for data requests while preserving the canonical code for wiki filenames and Obsidian identity.
-
-## Project Documentation
-
-- [Architecture](docs/architecture.md) — analysis pipeline, Obsidian writeback, symbol model
-- [Runbook](docs/runbook.md) — setup, verification commands, troubleshooting
-- [Handoff](docs/handoff.md) — completed batches, open PRs, next-batch guidance
-
-## Requirements
-
-- Python 3.9+
-- Obsidian vault with a sync solution (Dropbox, iCloud, remotely-save, etc.)
-- Claude Code CLI (for running the analysis agent)
-
-Optional: [Longbridge](https://open.longportapp.com/) account for real-time HK/CN data.
+- `docs/architecture.md` — system design and data flow
+- `docs/integration-guide.md` — MCP, Telegram, Inbox and Podwise integration steps
+- `docs/runbook.md` — operations, scheduling, verification and troubleshooting
+- `docs/handoff.md` — current handoff snapshot for new agents and maintainers
+- `AGENTS.md` — compact coding-agent operating guide
+- `MCP_CONFIG.md` — MCP server configuration reference
+- `SCHEDULER.md` — scheduler notes
 
 ## License
 
