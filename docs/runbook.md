@@ -53,7 +53,7 @@ For a full report write:
 python scripts/analyze_stock.py AAPL
 ```
 
-For US + HK end-to-end smoke checks:
+For fixed US + HK end-to-end smoke checks:
 
 ```bash
 PYTHONIOENCODING=utf-8 python scripts/analyze_stock.py HIMS.US
@@ -62,11 +62,41 @@ PYTHONIOENCODING=utf-8 python scripts/analyze_stock.py 03986.HK
 
 Expected side effects:
 
-- `Analysis/AAPL_US.md`, `Analysis/HIMS_US.md`, or `Analysis/03986_HK.md` exists under `Config.get_wiki_dir()` depending on the symbol tested.
+- `Analysis/HIMS_US.md` and `Analysis/03986_HK.md` exist under `Config.get_wiki_dir()` after the fixed smoke checks.
+- `Analysis/AAPL_US.md` exists under `Config.get_wiki_dir()` if the quick-start AAPL example is tested.
 - `Charts/{CODE}_wyckoff.png` may exist under `WIKI_BASE_DIR/Charts` if enough historical rows are available.
 - Top-level sections such as `研究笔记`, `财报预期`, `流动性分析`, `期权市场`, and `交叉引用` should appear once as line-anchored `##` headings.
 - Report headings inside `研究笔记` should be nested as `###` or lower, not `#` or `##`.
-- Dashboard updates when `python run_analysis.py --dashboard` is run.
+- Dashboard updates when `python run_analysis.py --dashboard` or `python scripts/update_dashboard.py --json` is run.
+
+## Dashboard Operations
+
+Dashboard is regenerated from repository/vault state; do not patch the generated Markdown by hand.
+
+### Manual refresh
+
+```bash
+python run_analysis.py --dashboard
+```
+
+Use this after writing a stock analysis, changing task status files, or appending analysis log entries.
+
+### Scheduler refresh
+
+```bash
+python scripts/update_dashboard.py --json
+python scripts/update_dashboard.py --notify
+```
+
+Use the wrapper for cron, launchd, Windows Task Scheduler, and automation checks. `--json` reports `success`, `dashboard_path`, `elapsed_seconds`, and `timestamp`; `--notify` adds desktop notification output where supported.
+
+### Verify stale Dashboard reports
+
+1. Run `python scripts/update_dashboard.py --json` from the project root.
+2. Confirm `success` is true and `dashboard_path` equals `.env` `OBSIDIAN_DASHBOARD_PATH`.
+3. Run `python -c "from config import Config; print(Config.get_wiki_dir())"` and compare the printed wiki path with the vault opened in Obsidian.
+4. If task counts look wrong, inspect Markdown files under `OBSIDIAN_TASKS_DIR` for `status: pending`.
+5. If tracked-stock counts look wrong, inspect `Analysis/index.md` under the configured wiki directory.
 
 ## Common Operations
 
@@ -117,6 +147,9 @@ This writes `raycat_backtest_report.md` into the wiki directory.
 | `WIKI_BASE_DIR is required` | `.env` missing/empty | copy `.env.example` to `.env` and fill paths |
 | Wiki file not visible in Obsidian | wrong `WIKI_BASE_DIR` / `WIKI_SUBDIR` | print `Config.get_wiki_dir()` and compare with vault |
 | Duplicate `TEM.US.md` and `TEM_US.md` | manual write used wrong filename | keep underscore file, remove duplicate only after confirming content |
+| Dashboard update reports success but Obsidian is stale | `OBSIDIAN_DASHBOARD_PATH` points to another vault/file | compare JSON `dashboard_path` with the file open in Obsidian |
+| Dashboard task count is wrong | task front matter/status text differs from `status: pending` | inspect `OBSIDIAN_TASKS_DIR` Markdown statuses |
+| Dashboard stock count is wrong | stale or missing `Analysis/index.md` | run a stock analysis or inspect MemoryManager index output |
 | `ModuleNotFoundError: croniter` | scheduler dependency missing | `pip install -r requirements.txt` |
 | `ModuleNotFoundError: watchdog` | watcher dependency missing | `pip install -r requirements.txt` |
 | `ModuleNotFoundError: telegram` | Telegram dependency missing | `pip install -r requirements.txt` |

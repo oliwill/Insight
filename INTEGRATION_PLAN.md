@@ -56,4 +56,21 @@ scripts/analyze_stock.py
 
 ## Remaining External Skill Gap
 
-The local modules provide baseline data and structure. For full investment-grade analysis, Claude Code should still call finance skills listed in `CLAUDE.md` when the user requests a stock analysis, especially for real-time GEX/options flow, insider/congressional trading, supply-chain mapping, SEPA stage confirmation, and cross-source sentiment.
+The local modules provide baseline data and structure. Full investment-grade analysis still needs external finance skills for real-time and specialized signals that are not guaranteed by the local pipeline.
+
+Before writing a full stock report, run this checklist and either include the result or mark the item as unavailable:
+
+| Gap | Preferred skill | Trigger | Report placement |
+|---|---|---|---|
+| Real-time GEX / options flow | `finance-skills-funda-data` | every full US stock analysis, and any name where options positioning is part of the thesis | `期权市场`, risk/catalyst notes |
+| Insider / congressional trading | `finance-skills-funda-data` | every full US stock analysis; explicitly note when the issuer is non-US or data is unavailable | `内部人信号`, governance score notes |
+| Analyst estimates and target revisions | `finance-skills-funda-data` | every full stock analysis | valuation notes, earnings setup |
+| Supply-chain / customer exposure | `finance-skills-funda-data` | hardware, semis, industrials, platform ecosystems, or any thesis dependent on key customers/suppliers | company moat and catalyst sections |
+| SEPA stage / trend-template confirmation | `finance-skills-sepa-strategy` | every full stock analysis, especially before assigning `Ready` timing | `技术面`, `交易时机状态` |
+| Cross-source sentiment | `finance-skills-finance-sentiment` | every full stock analysis; compare against local `web_search` before scoring TAM/attention | `社交情绪`, risk notes |
+| Peer P/S baseline and related stocks | `finance-skills-stock-correlation` | every full stock analysis where valuation uses peer context | valuation and `交叉引用` |
+| Earnings preview / recap | `finance-skills-earnings-preview` or `finance-skills-earnings-recap` | within 30 days before earnings, or after a reported quarter | `财报预期`, `财报前情景预判`, catalyst notes |
+| Liquidity / market impact | `finance-skills-stock-liquidity` | small-cap, low-ADTV, wide-spread, HK/CN names, or any position-sizing discussion | `流动性分析` |
+| Named KOL or holder signal | `finance-skills-twitter-reader` | when a specific KOL, fund manager, or public holder is part of the user's prompt or evidence | `KOL 观点汇总` |
+
+If a skill is unavailable, do not fabricate the missing signal. Label the gap in the report and keep Research Score separate from Timing State.

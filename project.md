@@ -33,6 +33,7 @@
 | Yahoo 港股代码映射测试 | 已实现 | `tests/test_yahoo_symbol.py` |
 | Obsidian section 安全写入测试 | 已实现 | `tests/test_section_write.py` |
 | README 安装验证清单 | 已实现 | `README.md` 的 `Verify Installation` |
+| 报告质量评估器 | 已实现 | `analyzer.report_quality.ReportQualityEvaluator` / `tests/test_report_quality.py` |
 
 ## 3. 关键项目约束
 
@@ -79,7 +80,7 @@
 
 ### M3：自动化入口与集成
 
-状态：进行中维护
+状态：已完成，持续维护
 
 已完成：
 
@@ -88,12 +89,14 @@
 - Inbox Watcher。
 - Podwise 同步。
 - Scheduler / launchd 相关文档。
+- Windows 前台模式 / Task Scheduler 调度路径文档。
 - Weekly framework review。
+- 一键分析固定 smoke example 已固化到 runbook / handoff。
 
 后续重点：
 
-- 确认 Windows 环境下调度方案是否需要独立文档或脚本封装。
-- 将一键分析端到端 smoke example 固化到 runbook 或 handoff。
+- 根据实际分析使用情况复核外部 finance skills checklist 是否需要增删。
+- 根据调度运行反馈复核 Dashboard 更新频率和失败恢复步骤。
 
 ### M4：投资级分析增强
 
@@ -115,16 +118,14 @@
 
 | 任务 | 负责人 | 状态 | 下一步 |
 |---|---|---|---|
-| Windows 调度方案确认 | 待定 | 待开始 | 确认前台模式、Task Scheduler 或独立脚本封装的推荐路径 |
+| M4 投资级分析增强候选项评估 | 待定 | 待推进 | 按实际分析需求选择 GEX、insider、supply chain、SEPA、sentiment 等能力的下一步落地方式 |
 
 ### Next
 
 | 任务 | 优先级 | 说明 |
 |---|---|---|
-| Windows 调度方案确认 | P1 | `scheduler.py --daemon` 依赖 `os.fork()`，Windows 需要前台模式或 Task Scheduler 方案。 |
-| 一键分析 smoke example 固化 | P1 | 当前 HIMS.US 和 03986.HK 已作为端到端写入示例，可考虑形成固定验证步骤。 |
-| 外部 finance skills 缺口清单化 | P2 | 把 GEX、insider、supply chain、SEPA、sentiment 的调用时机写成 checklist。 |
-| Dashboard 更新策略复核 | P2 | 明确何时自动更新、何时手动更新，以及失败时如何恢复。 |
+| 更完整的回测指标 | P2 | 评估是否扩展 `backtest.runner` 和 review 输出。 |
+| 多数据源容错策略 | P2 | 针对 Yahoo / DuckDuckGo / NewsAPI / Longbridge 分层降级。 |
 
 ### Later
 
@@ -132,7 +133,6 @@
 |---|---|---|
 | 更完整的回测指标 | 提高策略反馈质量 | 可扩展 `backtest.runner` 和 review 输出。 |
 | 多数据源容错策略 | 提高分析稳定性 | 针对 Yahoo / DuckDuckGo / NewsAPI / Longbridge 分层降级。 |
-| 报告质量评估器 | 降低生成报告的漂移风险 | 检查是否遗漏关键 section、是否混淆 Research Score 和 Timing State。 |
 
 ### Done
 
@@ -140,6 +140,9 @@
 |---|---|---|
 | 2026-05-25 | 创建 `project.md` | 建立项目进度、里程碑、看板和风险的统一管理入口。 |
 | 2026-05-25 | 更新 README 验证入口 | `README.md` 已加入核心 pytest 命令、Cockpit/writeback import smoke check、wiki section map、weekly review 和 `AGENTS.md` 文档索引，并推送到 GitHub `origin/feature/batch-e-docs-config`。 |
+| 2026-05-25 | 完成 M3 文档后续项 | Windows 调度路径已明确为前台模式或 Task Scheduler；HIMS.US / 03986.HK 已固化为固定端到端 smoke examples。 |
+| 2026-05-25 | 完成外部 finance skills 与 Dashboard 策略文档化 | 外部 finance skills 调用时机已写入 `INTEGRATION_PLAN.md`、`CLAUDE.md`、`AGENTS.md`；Dashboard 更新策略已写入 `SCHEDULER.md` 和 `docs/runbook.md`。 |
+| 2026-05-25 | 完成报告质量评估器 | 新增 `ReportQualityEvaluator`，检查报告必需章节、重复章节编号，以及 Research Score / Timing State 分离；修正生成报告“操作建议”章节编号。 |
 
 ## 6. 风险与阻塞
 
@@ -179,7 +182,7 @@
 
 ```bash
 git status --short
-python -m pytest tests/test_core_scoring.py tests/test_section_write.py tests/test_yahoo_symbol.py tests/test_backtest_timeline.py tests/test_data_manager_env.py -v
+python -m pytest tests/test_core_scoring.py tests/test_report_quality.py tests/test_section_write.py tests/test_yahoo_symbol.py tests/test_backtest_timeline.py tests/test_data_manager_env.py -v
 python -c "from input.evidence import EvidenceExtractor; from analyzer.research_score import ResearchScoreEngine; from analyzer.timing_engine import TimingEngine; from run_analysis import write_analysis_to_obsidian; print('core/writeback imports ok')"
 python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py
 python -c "from config import Config; print(Config.get_wiki_dir())"

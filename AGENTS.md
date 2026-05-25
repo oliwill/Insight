@@ -67,7 +67,14 @@ When the user asks to analyze a stock, use this sequence unless they explicitly 
 
    Inspect `stock_info`, `fundamentals`, `technicals`, `wyckoff`, `earnings`, `liquidity`, `options`, `web_search`, `peers`, `etf`, `wiki_context`, and `inbox_materials`.
 
-2. **Gather external finance context when needed**. Claude Code agents should use the finance skills named in `CLAUDE.md` for real-time GEX/options flow, insider/congressional trading, analyst estimates, supply-chain mapping, SEPA confirmation, and cross-source sentiment. Other agents should gather equivalent data explicitly and label missing data rather than fabricating it.
+2. **Gather external finance context when needed**. Claude Code agents should use the finance skills named in `CLAUDE.md`; other agents should gather equivalent data explicitly and label missing data rather than fabricating it. For a full stock analysis, check:
+   - `finance-skills-funda-data`: real-time GEX/options flow, insider/congressional trading, analyst estimates, and supply-chain exposure.
+   - `finance-skills-stock-correlation`: peer P/S baseline and related stocks for valuation context.
+   - `finance-skills-finance-sentiment`: Reddit / X / Polymarket or equivalent cross-source sentiment.
+   - `finance-skills-sepa-strategy`: SEPA stage, trend-template, and VCP confirmation before assigning `Ready` timing.
+   - `finance-skills-earnings-preview` or `finance-skills-earnings-recap`: within 30 days before earnings or after a reported quarter.
+   - `finance-skills-stock-liquidity`: small-cap, thin-liquidity, HK/CN, or position-sizing-sensitive names.
+   - `finance-skills-twitter-reader`: named KOL, fund manager, or public holder signals.
 
 3. **Generate or write analysis**:
    - For the local full workflow, prefer `python scripts/analyze_stock.py <TICKER>`.

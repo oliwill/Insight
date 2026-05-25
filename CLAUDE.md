@@ -89,6 +89,19 @@ When the user asks to analyze a stock, use this sequence unless they explicitly 
    python run_analysis.py --dashboard
    ```
 
+   Use this whenever stock wiki pages, task files, or analysis logs changed during the workflow. For scheduled refreshes, prefer `python scripts/update_dashboard.py --notify` through the OS scheduler. The wrapper writes the same Dashboard via `run_analysis.update_dashboard()` and is the supported automation entry point.
+
+## Dashboard Update Strategy
+
+Dashboard is a generated Obsidian view, not a hand-edited note.
+
+- Source data: `Analysis/index.md` from `MemoryManager.get_index()`, pending task counts from `OBSIDIAN_TASKS_DIR`, and recent log entries from `MemoryManager.get_recent_log(n=5)`.
+- Write target: `OBSIDIAN_DASHBOARD_PATH`; keep this path in `.env` rather than hardcoding it in scripts or MCP clients.
+- Manual refresh: run `python run_analysis.py --dashboard` after ad-hoc analysis or task edits.
+- Scheduled refresh: run `python scripts/update_dashboard.py --notify`; use `--json` for automation checks and logs.
+- MCP refresh: use `update_dashboard_tool` when the client needs an explicit Dashboard rebuild.
+- Recovery: if Dashboard content looks stale, first verify `.env` paths and run `python scripts/update_dashboard.py --json`; then compare `Config.get_wiki_dir()` with the vault opened in Obsidian.
+
 ## Cockpit Architecture
 
 The current one-click script is `scripts/analyze_stock.py`.

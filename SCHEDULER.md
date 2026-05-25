@@ -38,12 +38,65 @@ Use your platform scheduler to call the wrapper scripts directly.
 
 The plist files contain example absolute paths; edit `ProgramArguments`, `WorkingDirectory`, and `PYTHONPATH` before loading them.
 
+### Windows Task Scheduler
+
+Use Task Scheduler to call the wrapper scripts directly instead of `scheduler.py --daemon`, because daemon mode uses `os.fork()`.
+
+Create one task per wrapper with these fields:
+
+| Task Scheduler field | Value |
+|---|---|
+| Program/script | `C:\path\to\obsidiantrader\.venv\Scripts\python.exe` or `python` |
+| Add arguments | `scripts\scan_inbox.py --notify` |
+| Start in | `C:\path\to\obsidiantrader` |
+
+Recommended triggers:
+
+| Task | Trigger | Add arguments |
+|---|---|---|
+| Inbox scan | every 30 minutes | `scripts\scan_inbox.py --notify` |
+| Backtest review | daily 09:00 | `scripts\run_review.py --notify` |
+| Dashboard update | daily 08:00 | `scripts\update_dashboard.py --notify` |
+| Weekly framework review | Saturday 10:00 | `scripts\weekly_review.py --notify` |
+
+Validation commands from the project root:
+
+```bash
+python scripts/scan_inbox.py --dry-run --json
+python scripts/run_review.py --days-after 30 --lookback 90 --json
+python scripts/update_dashboard.py --json
+python scripts/weekly_review.py --json
+```
+
+If the task runs under a different Windows user, confirm that user's `.env` paths point to the same Obsidian vault and that `python -c "from config import Config; print(Config.get_wiki_dir())"` prints the expected wiki directory.
+
 Logs:
 
 - `/tmp/trader-inbox.log` / `/tmp/trader-inbox.err`
 - `/tmp/trader-review.log` / `/tmp/trader-review.err`
 - `/tmp/trader-dashboard.log` / `/tmp/trader-dashboard.err`
 - `/tmp/trader-weekly-review.log` / `/tmp/trader-weekly-review.err`
+
+## Dashboard Refresh Strategy
+
+`Dashboard.md` is a generated status surface. Treat `scripts/update_dashboard.py` as the scheduler-facing entry point and `run_analysis.py --dashboard` as the manual/operator entry point.
+
+Recommended cadence:
+
+| Trigger | Command | Purpose |
+|---|---|---|
+| After manual analysis write | `python run_analysis.py --dashboard` | refresh immediately after stock wiki, task, or log changes |
+| Daily scheduled refresh | `python scripts/update_dashboard.py --notify` | keep Obsidian current even when no scan job runs |
+| Automation validation | `python scripts/update_dashboard.py --json` | emit machine-readable success/path/timing output |
+| MCP client request | `update_dashboard_tool` | rebuild on demand from chat or external client |
+
+Implementation notes:
+
+- Dashboard output path comes from `OBSIDIAN_DASHBOARD_PATH`.
+- Stock overview comes from `Analysis/index.md` through `MemoryManager.get_index()`.
+- Pending task count scans Markdown files under `OBSIDIAN_TASKS_DIR` for `status: pending`.
+- Recent activity comes from `MemoryManager.get_recent_log(n=5)`.
+- If a scheduled refresh appears stale, run the `--json` command first and compare the reported `dashboard_path` with the Obsidian note path.
 
 ## Option B: Python Scheduler
 

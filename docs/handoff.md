@@ -63,5 +63,5 @@ Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a re
 - `scheduler.py --daemon` uses `os.fork()` and is for macOS/Linux. Use foreground mode or Windows Task Scheduler on Windows.
 - macOS notifications use `osascript`; on Windows the notification module prints fallback text.
 - `scripts/backtest_raycat.py` uses a fixed ticker/date list and is a source-specific utility, not a generic backtest importer.
-- HIMS.US and 03986.HK have been validated as end-to-end Obsidian write smoke examples for the current analysis pipeline.
+- HIMS.US and 03986.HK are fixed US/HK end-to-end Obsidian write smoke examples; run them only when report writes are intended.
 - Full investment-grade stock analysis still needs external finance skills for real-time GEX/options flow, insider/congressional trades, supply-chain mapping, and SEPA confirmation.

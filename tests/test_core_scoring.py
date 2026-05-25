@@ -10,6 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from input.evidence import EvidenceExtractor, EvidenceItem
+from analyzer.report_generator import ReportGenerator
+from analyzer.report_quality import ReportQualityEvaluator
 from analyzer.research_score import ResearchScoreEngine
 from analyzer.timing_engine import TimingEngine
 
@@ -69,6 +71,7 @@ def test_batch_a_exports_import():
     assert EvidenceItem.__name__ == "EvidenceItem"
     assert ResearchScoreEngine.__name__ == "ResearchScoreEngine"
     assert TimingEngine.__name__ == "TimingEngine"
+    assert ReportQualityEvaluator.__name__ == "ReportQualityEvaluator"
 
 
 
@@ -91,6 +94,7 @@ def test_package_roots_do_not_eagerly_import_unrelated_modules():
 
     assert input_package.EvidenceExtractor.__name__ == "EvidenceExtractor"
     assert analyzer_package.ResearchScoreEngine.__name__ == "ResearchScoreEngine"
+    assert analyzer_package.ReportQualityEvaluator.__name__ == "ReportQualityEvaluator"
     assert "input.ingest" not in sys.modules
     assert "analyzer.fundamental" not in sys.modules
     assert "analyzer.comprehensive" not in sys.modules

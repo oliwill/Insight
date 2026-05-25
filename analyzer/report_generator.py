@@ -228,7 +228,7 @@ class ReportGenerator:
 
 ---
 
-## 五、催化因素
+## 六、催化因素
 
 ### {cls.EMOJI['positive']} 向上催化
 {cls._get_positive_catalysts(fundamentals, earnings, price)}
@@ -238,7 +238,7 @@ class ReportGenerator:
 
 ---
 
-## 六、操作建议
+## 七、操作建议
 
 ### 当前状态
 {cls._get_timing_action(timing_label)} | Research Score {research_value:.1f}/100 | Timing {timing_label}
