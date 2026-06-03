@@ -122,8 +122,6 @@
 
 | 任务 | 优先级 | 说明 |
 |---|---|---|
-| Windows 调度端到端验证 | P1 | 验证 Task Scheduler 的 inbox/review/dashboard 三条任务和 `logs/scheduler/*.log`。 |
-| 一键分析 smoke example 固化 | P1 | 将 HIMS.US 和 03986.HK 形成固定验证步骤，检查 wiki 文件名、section、chart、timeline 和研究笔记层级。 |
 | Dashboard 更新策略复核 | P1 | 明确何时自动更新、何时手动更新，以及失败时如何恢复。 |
 | 自动化入口测试边界 | P2 | 给 watcher / bot / scheduler 补参数解析、dry-run 和 fallback 测试。 |
 | 外部 finance skills 缺口清单化 | P2 | 把 GEX、insider、supply chain、SEPA、sentiment 的调用时机写成 checklist。 |
@@ -140,6 +138,10 @@
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-03 | 固化 HIMS.US / 03986.HK 写入型 smoke example | 新增 `scripts/windows/run_write_smoke_examples.ps1` 和 `scripts/verify_write_smoke.py`；HIMS.US wiki+chart 验证通过，03986.HK wiki 验证通过。 |
+| 2026-06-03 | 完成 Windows Task Scheduler 实机验证 | 新增 `scripts/windows/verify_scheduled_tasks.ps1`；`trader-obsidian-inbox` / `review` / `dashboard` 三条任务注册、触发和日志验证通过。 |
+| 2026-06-03 | 修复 review runner 的 Windows PowerShell 兼容问题 | `run_scheduled_task.ps1` 改为 `Start-Process` + stdout/stderr 文件重定向，避免 loguru stderr 被误判为任务失败。 |
+| 2026-06-03 | 修复 backtest Decimal 价格序列兼容性 | `backtest/core.py` 强制将 close 序列转为 float，并补充 Decimal 回归测试。 |
 | 2026-06-02 | 建立 P0 smoke test 基线 | 新增 `requirements-dev.txt` 与 `scripts/windows/run_smoke_tests.ps1`；当前完整 smoke 通过，21 个回归测试通过。 |
 | 2026-06-02 | 修复复盘 ticker discovery 噪声 | 过滤 Obsidian wikilink、路径、人物名和主题名，避免定期复盘扫描非股票项。 |
 | 2026-06-02 | 改善报告可读性和复盘入口 | 报告标题改为股票名称+代码，空数据模块自动省略并汇总数据缺口；复盘全量扫描增加 wiki 文件 fallback 和 `--list-tickers`。 |
@@ -152,7 +154,7 @@
 | 风险 | 影响 | 当前处理 |
 |---|---|---|
 | Windows 环境没有稳定 Python 命令 | smoke test 和自动任务不可复现 | 使用 `scripts/windows/run_smoke_tests.ps1 -PythonExe ...`，并通过 `requirements-dev.txt` 固化 `pytest`。 |
-| Windows 与 macOS/Linux 调度能力不一致 | 自动任务在 Windows 上可能不能直接使用 daemon 模式 | Windows 使用前台模式或 Task Scheduler；不要默认 `scheduler.py --daemon` 可用。 |
+| Windows 与 macOS/Linux 调度能力不一致 | 自动任务在 Windows 上可能不能直接使用 daemon 模式 | Windows 已验证 Task Scheduler 方案；不要默认 `scheduler.py --daemon` 可用。 |
 | 外部实时数据不足 | 投资级分析可能缺少 GEX、内部人、供应链等关键变量 | 完整分析时调用外部 finance skills，并在报告中标注数据缺口。 |
 | Obsidian section 被错误覆盖 | 长期研究历史可能丢失或结构损坏 | 保持 section 写入测试，修改写入逻辑时优先跑 `tests/test_section_write.py`。 |
 | Research Score 与 Timing State 混淆 | 导致错误交易建议 | 所有报告和代码改动都明确二者职责边界。 |

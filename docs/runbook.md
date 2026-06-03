@@ -42,6 +42,19 @@ On Windows, prefer the wrapper:
 powershell -ExecutionPolicy Bypass -File scripts\windows\run_smoke_tests.ps1
 ```
 
+Write-smoke examples for the canonical US + HK paths:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\run_write_smoke_examples.ps1 -PythonExe ".\.venv\Scripts\python.exe"
+```
+
+This runs:
+
+- `python scripts/analyze_stock.py HIMS.US`
+- `python scripts/analyze_stock.py 03986.HK`
+
+and then verifies the expected wiki files, section structure, and research-note heading nesting.
+
 If you are bootstrapping a machine before installing `pytest` or before `.env`
 paths are ready, you can still run syntax-only checks:
 
@@ -134,6 +147,20 @@ Get-ScheduledTask -TaskName "trader-obsidian-*"
 ```
 
 Use `-DryRunInbox` on the registration command if Inbox scans should remain read-only while testing.
+
+To register and immediately trigger all three scheduled tasks for validation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\verify_scheduled_tasks.ps1 -PythonExe ".\.venv\Scripts\python.exe" -DryRunInbox -Force
+```
+
+This will:
+
+- re-register `trader-obsidian-inbox`
+- re-register `trader-obsidian-review`
+- re-register `trader-obsidian-dashboard`
+- trigger each task once
+- print `LastRunTime`, `LastTaskResult`, and the newly created scheduler log files
 
 ### Backtest raycat fixed list
 

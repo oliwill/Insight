@@ -144,7 +144,7 @@ class BacktestEngine:
         if len(hold_df) < 2:
             logger.warning(f"{ticker} insufficient holding period data")
             return perf
-        prices = hold_df["close"].values
+        prices = hold_df["close"].astype(float).to_numpy()
         perf.holding_days = len(hold_df) - 1
         if action == "BUY":
             perf.return_pct = (prices[-1] / perf.entry_price - 1) * 100

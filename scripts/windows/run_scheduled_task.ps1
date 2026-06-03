@@ -11,6 +11,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $LogDir = Join-Path $ProjectRoot "logs\scheduler"
@@ -32,8 +35,28 @@ function Invoke-TraderTask {
         "[$(Get-Date -Format s)] START $Name" | Tee-Object -FilePath $logPath
         "& $PythonExe $($Arguments -join ' ')" | Tee-Object -FilePath $logPath -Append
 
-        & $PythonExe @Arguments 2>&1 | Tee-Object -FilePath $logPath -Append
-        $exitCode = $LASTEXITCODE
+        $stdoutPath = Join-Path $LogDir "$Name-$timestamp.stdout.log"
+        $stderrPath = Join-Path $LogDir "$Name-$timestamp.stderr.log"
+        $process = Start-Process `
+            -FilePath $PythonExe `
+            -ArgumentList $Arguments `
+            -WorkingDirectory $ProjectRoot `
+            -WindowStyle Hidden `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        if (Test-Path $stdoutPath) {
+            Get-Content -Path $stdoutPath | Tee-Object -FilePath $logPath -Append
+            Remove-Item -LiteralPath $stdoutPath -Force
+        }
+        if (Test-Path $stderrPath) {
+            Get-Content -Path $stderrPath | Tee-Object -FilePath $logPath -Append
+            Remove-Item -LiteralPath $stderrPath -Force
+        }
+
+        $exitCode = $process.ExitCode
 
         "[$(Get-Date -Format s)] END $Name exit=$exitCode" | Tee-Object -FilePath $logPath -Append
         if ($exitCode -ne 0) {

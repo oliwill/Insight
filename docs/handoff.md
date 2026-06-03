@@ -1,6 +1,6 @@
 # Handoff Snapshot
 
-Status date: 2026-06-02
+Status date: 2026-06-03
 
 ## What Is Working
 
@@ -54,6 +54,29 @@ If `pytest` or `.env` paths are not ready yet, run syntax-only checks first:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows\run_smoke_tests.ps1 -SkipPytest -SkipRuntimeChecks
 ```
+
+Write-smoke examples for the canonical US + HK paths:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\run_write_smoke_examples.ps1 -PythonExe ".\.venv\Scripts\python.exe"
+```
+
+This command was validated on 2026-06-03 for:
+
+- `HIMS.US` -> `HIMS_US.md` plus chart output
+- `03986.HK` -> `03986_HK.md`
+
+Windows Task Scheduler validation wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\verify_scheduled_tasks.ps1 -PythonExe ".\.venv\Scripts\python.exe" -DryRunInbox -Force
+```
+
+This command was validated on 2026-06-03 and produced successful `LastTaskResult = 0` for:
+
+- `trader-obsidian-inbox`
+- `trader-obsidian-review`
+- `trader-obsidian-dashboard`
 
 Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a report written to Obsidian.
 

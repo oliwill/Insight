@@ -76,9 +76,35 @@ function Register-TraderTask {
     Write-Host "Registered $taskName"
 }
 
-$inboxTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date
-$inboxTrigger.Repetition.Interval = $InboxInterval
-$inboxTrigger.Repetition.Duration = "P1D"
+function Convert-IsoDurationToTimeSpan {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+
+    if ($Value -match "^PT(\d+)M$") {
+        return New-TimeSpan -Minutes ([int]$Matches[1])
+    }
+    if ($Value -match "^PT(\d+)H$") {
+        return New-TimeSpan -Hours ([int]$Matches[1])
+    }
+    if ($Value -match "^P(\d+)D$") {
+        return New-TimeSpan -Days ([int]$Matches[1])
+    }
+
+    try {
+        return [TimeSpan]::Parse($Value)
+    }
+    catch {
+        throw "Unsupported interval '$Value'. Use PT30M, PT1H, P1D, or a TimeSpan value."
+    }
+}
+
+$inboxTrigger = New-ScheduledTaskTrigger `
+    -Once `
+    -At (Get-Date).Date `
+    -RepetitionInterval (Convert-IsoDurationToTimeSpan -Value $InboxInterval) `
+    -RepetitionDuration (New-TimeSpan -Days 1)
 
 Register-TraderTask `
     -ShortName "inbox" `

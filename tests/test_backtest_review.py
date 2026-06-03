@@ -1,10 +1,30 @@
 import sys
+from decimal import Decimal
 from pathlib import Path
+
+import pandas as pd
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from analyzer.base import AnalysisResult
+from backtest.core import BacktestEngine
 from backtest.runner import BacktestRunner
 from scripts.run_review import _parse_summary_counts
+
+
+class DecimalPriceDataManager:
+    def get_historical_data(self, ticker: str, period: str):
+        return pd.DataFrame(
+            {
+                "date": ["2026-01-02", "2026-01-03"],
+                "open": [Decimal("10"), Decimal("11")],
+                "high": [Decimal("10"), Decimal("11")],
+                "low": [Decimal("10"), Decimal("11")],
+                "close": [Decimal("10"), Decimal("11")],
+                "volume": [1000, 1000],
+            }
+        )
 
 
 def test_ticker_from_wiki_stem_restores_common_codes():
@@ -38,3 +58,16 @@ def test_parse_summary_counts():
     summary = "覆盖 3 只股票，验证 12 条信号。\n总体胜率 **58.3%**"
 
     assert _parse_summary_counts(summary) == (3, 12)
+
+
+def test_backtest_handles_decimal_price_series():
+    engine = BacktestEngine(data_manager=DecimalPriceDataManager())
+    result = engine.backtest_analysis(
+        "HIMS.US",
+        AnalysisResult(score=70, summary="BUY setup", signals=["BUY"], risks=[]),
+        "2026-01-02",
+        days_after=1,
+    )
+
+    assert result.signals[0].verified is True
+    assert result.signals[0].return_pct == pytest.approx(10.0)
