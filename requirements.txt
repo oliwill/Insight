@@ -1,8 +1,12 @@
 pandas
 numpy
 yfinance
+requests
 longbridge
 loguru
 python-dotenv
 matplotlib
 mcp>=1.0.0
+croniter
+watchdog
+python-telegram-bot

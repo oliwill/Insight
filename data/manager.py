@@ -21,35 +21,30 @@ def suppress_stdout():
     old_stdout = sys.stdout
     old_stdout_fd = None
     saved_stdout_fd = None
+    devnull_fd = None
 
     try:
-        if hasattr(sys.stdout, 'fileno'):
-            old_stdout_fd = sys.stdout.fileno()
-            # Save the original file descriptor by duplicating it
-            import os as os_module
-            import fcntl
-            saved_stdout_fd = os_module.dup(old_stdout_fd)
-            # Open dev/null and redirect stdout to it
-            devnull = os_module.open(os_module.devnull, os_module.O_WRONLY)
-            os_module.dup2(devnull, old_stdout_fd)
-            os_module.close(devnull)
+        try:
+            old_stdout_fd = old_stdout.fileno()
+        except (AttributeError, io.UnsupportedOperation, OSError):
+            old_stdout_fd = None
+
+        if old_stdout_fd is not None:
+            old_stdout.flush()
+            saved_stdout_fd = os.dup(old_stdout_fd)
+            devnull_fd = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull_fd, old_stdout_fd)
         # Also redirect Python's sys.stdout
         sys.stdout = io.StringIO()
         yield
     finally:
-        # Restore Python's sys.stdout first
-        sys.stdout = old_stdout
-        # Then restore the file descriptor
         if saved_stdout_fd is not None and old_stdout_fd is not None:
-            import os as os_module
-            # Flush before restoring
-            try:
-                sys.stdout.flush()
-            except Exception:
-                pass
-            # Restore the original file descriptor
-            os_module.dup2(saved_stdout_fd, old_stdout_fd)
-            os_module.close(saved_stdout_fd)
+            os.dup2(saved_stdout_fd, old_stdout_fd)
+            os.close(saved_stdout_fd)
+        if devnull_fd is not None:
+            os.close(devnull_fd)
+        # Restore Python's sys.stdout after the file descriptor is restored.
+        sys.stdout = old_stdout
 
 # 长桥SDK - lazy import to avoid debug output during module load
 LONGBRIDGE_AVAILABLE = False
@@ -72,9 +67,9 @@ def _import_longbridge():
         AdjustType = _AdjustType
         Period = _Period
         LONGBRIDGE_AVAILABLE = True
-    except ImportError:
+    except ImportError as e:
         LONGBRIDGE_AVAILABLE = False
-        logger.warning("longbridge SDK not installed, falling back to Yahoo Finance")
+        logger.warning(f"longbridge SDK not installed ({e}), falling back to Yahoo Finance")
 
 
 @dataclass
@@ -234,12 +229,16 @@ class DataManager:
         """
         标准化股票代码
         长桥格式: 美股 AAPL.US  港股 00700.HK / 02600.HK  A股 SH603906 / SZ000001
-        输入兼容: 603906 / SH603906 / sh603906 / 000001 / SZ000001
+        输入兼容: 603906 / SH603906 / sh603906 / 600000.SH / 000001.SZ / SZ000001
         """
         code = code.strip().upper()
         # 已经是长桥格式
         if code.endswith(".US") or code.endswith(".HK"):
             return code
+        if code.endswith(".SH"):
+            return f"SH{code[:-3]}"
+        if code.endswith(".SZ"):
+            return f"SZ{code[:-3]}"
         # A股: SH/SZ 前缀（长桥格式）
         if code.startswith("SH") or code.startswith("SZ"):
             return code
@@ -295,8 +294,7 @@ class DataManager:
         if not results:
             try:
                 import yfinance as yf
-                # YF 美股不需要 .US 后缀
-                yf_symbol = symbol.replace(".US", "")
+                yf_symbol = self._yf_symbol(symbol)
                 ticker = yf.Ticker(yf_symbol)
                 info = ticker.info
                 name = info.get("shortName") or info.get("longName") or symbol
@@ -446,9 +444,9 @@ class DataManager:
         # 美股: AAPL.US → AAPL
         if symbol.endswith(".US"):
             return symbol.replace(".US", "")
-        # 港股: 00700.HK → 00700.HK (YF 同格式)
+        # 港股: 长桥保留 5 位代码；Yahoo Finance 去掉前导 0
         if symbol.endswith(".HK"):
-            return symbol
+            return f"{symbol[:-3][-4:]}.HK"
         # A股: SH603906 → 603906.SS, SZ000001 → 000001.SZ
         if symbol.startswith("SH"):
             return symbol[2:] + ".SS"

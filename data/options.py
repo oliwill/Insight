@@ -37,6 +37,8 @@ class OptionsAnalyzer:
         s = symbol.upper()
         if s.endswith(".US"):
             return s.replace(".US", "")
+        if s.endswith(".HK"):
+            return f"{s[:-3][-4:]}.HK"
         return s
 
     def analyze(self, symbol: str) -> Dict:

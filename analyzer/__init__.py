@@ -4,6 +4,8 @@ from .fundamental import FundamentalAnalyzer
 from .wyckoff import WyckoffAnalyzer, WyckoffStructure, MarketPhase, WyckoffEvent
 from .comprehensive import ComprehensiveAnalyzer
 from .models import get_analyzer, list_analyzers
+from .research_score import ResearchScoreEngine, ResearchScore, ResearchDimensionScore
+from .timing_engine import TimingEngine, TimingState
 
 __all__ = [
     "BaseAnalyzer",
@@ -16,4 +18,9 @@ __all__ = [
     "WyckoffEvent",
     "get_analyzer",
     "list_analyzers",
+    "ResearchScoreEngine",
+    "ResearchScore",
+    "ResearchDimensionScore",
+    "TimingEngine",
+    "TimingState",
 ]
