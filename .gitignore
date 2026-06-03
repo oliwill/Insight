@@ -22,6 +22,7 @@ wheels/
 
 # Virtual Environment
 venv/
+.venv/
 ENV/
 env/
 
@@ -42,6 +43,11 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
+
+# Generated analysis/review output
+output/
+tmp_analysis/
 
 # Memory and specific data (keep your Obsidian vault data separate if needed)
 # data/
