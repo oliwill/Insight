@@ -103,10 +103,12 @@
 - 实时 GEX / options flow。
 - Insider / congressional trading。
 - Supply-chain mapping。
+- DCF / relative / SOTP 估值三角验证与分析师预期修订趋势。
 - SEPA stage confirmation。
-- 跨来源结构化 sentiment。
+- 跨来源结构化 sentiment 与 read-only social/source readers。
+- ETF premium / NAV、options payoff、TradingView IV/Greeks、Hormuz oil/shipping geopolitical exposure 等场景工具。
 
-当前策略：本地模块提供基线数据和结构；完整投资级分析仍需要 Claude Code 调用外部 finance skills 补足实时和专业数据。
+当前策略：本地模块提供基线数据和结构；完整投资级分析仍需要 Claude Code 调用 `himself65/finance-skills` v8.0.1 中的 market-analysis、data-providers 和 social-readers 相关 skills 补足实时和专业数据。
 
 ## 5. 工作看板
 
@@ -135,6 +137,7 @@
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-04 | 融合 finance-skills v8.0.1 更新 | 通过 `npx skills add himself65/finance-skills` 安装 24 个本地 skills 到 `.agents/skills/`，生成 `skills-lock.json`，并将最新 market-analysis / data-providers / social-readers 清单同步到项目文档和本地 `/think` 检查清单。 |
 | 2026-06-04 | 补齐外部 finance skills 缺口清单化 | 在 `CLAUDE.md` 和 `INTEGRATION_PLAN.md` 中补充 full-analysis checklist，明确 GEX / insider / supply chain / SEPA / sentiment / earnings / liquidity 的调用时机。 |
 | 2026-06-04 | 补齐自动化入口测试边界 | 新增 `tests/test_automation_entrypoints.py`，覆盖 `scan_inbox.py` 的 dry-run / fallback、`run_review.py --list-tickers`、`update_dashboard.py` 的 scheduled reason 与 restore 路径。 |
 | 2026-06-04 | 收口 Git 可交付基线 | `codex/p0-delivery-baseline` 上的 smoke、scheduler 和 Dashboard 策略改动均已提交，工作区保持清洁。 |
@@ -156,7 +159,7 @@
 |---|---|---|
 | Windows 环境没有稳定 Python 命令 | smoke test 和自动任务不可复现 | 使用 `scripts/windows/run_smoke_tests.ps1 -PythonExe ...`，并通过 `requirements-dev.txt` 固化 `pytest`。 |
 | Windows 与 macOS/Linux 调度能力不一致 | 自动任务在 Windows 上可能不能直接使用 daemon 模式 | Windows 已验证 Task Scheduler 方案；不要默认 `scheduler.py --daemon` 可用。 |
-| 外部实时数据不足 | 投资级分析可能缺少 GEX、内部人、供应链等关键变量 | 完整分析时调用外部 finance skills，并在报告中标注数据缺口。 |
+| 外部实时数据不足 | 投资级分析可能缺少 GEX、内部人、供应链、估值三角验证、分析师预期修订、结构化 sentiment、TradingView IV/Greeks 等关键变量 | 完整分析时调用 `himself65/finance-skills` v8.0.1 对应 skills，并在报告中标注数据缺口。 |
 | Obsidian section 被错误覆盖 | 长期研究历史可能丢失或结构损坏 | 保持 section 写入测试，修改写入逻辑时优先跑 `tests/test_section_write.py`。 |
 | Research Score 与 Timing State 混淆 | 导致错误交易建议 | 所有报告和代码改动都明确二者职责边界。 |
 

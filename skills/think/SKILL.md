@@ -21,6 +21,29 @@
 - [ ] 数据是否足够？（新股、停牌等情况）
 - [ ] 需要补充哪些外部数据？
 
+### 2.5 外部 Finance Skills 路由
+使用 `himself65/finance-skills` v8.0.1 的已安装 skill 名称；若本地名称带 plugin 前缀或旧 `finance-skills-*` 前缀，选择同名能力。
+
+#### Full-analysis 必查
+- [ ] `funda-data`：GEX / options flow、内部人、国会议员交易、供应链、filings / transcripts。
+- [ ] `company-valuation`：DCF + relative + SOTP、WACC 敏感性、Bull/Base/Bear 目标价。
+- [ ] `estimate-analysis`：EPS / revenue 预期修订、estimate spread、growth projection。
+- [ ] `stock-correlation`：同行 P/S、相关股票、co-movement。
+- [ ] `finance-sentiment`：Reddit / X / news / Polymarket 结构化情绪。
+- [ ] `sepa-strategy`：SEPA stage、trend template、VCP、entry rules、position sizing。
+
+#### 条件触发
+- [ ] `stock-liquidity`：小盘、ADR、低流动性或仓位尺寸高于观察仓。
+- [ ] `earnings-preview`：财报前 30 天内。
+- [ ] `earnings-recap`：财报后更新 thesis 前。
+- [ ] `options-payoff`：用户讨论期权策略、截图、multi-leg P&L。
+- [ ] `etf-premium`：ETF / leveraged / inverse / bond / crypto / international fund、NAV premium、ETF GEX。
+- [ ] `tradingview-reader`：需要 TradingView options chain、IV / Greeks、screener、chart state、alerts、watchlists。
+- [ ] `hormuz-strait`：油价、航运、保险、能源、国防或 Hormuz 地缘风险。
+- [ ] `twitter-reader` / `telegram-reader` / `discord-reader` / `linkedin-reader` / `yc-reader`：source 明确匹配时优先使用。
+- [ ] `opencli-reader`：没有专用 reader 但 opencli 覆盖的 source，只读 fallback。
+- [ ] 必要 skill 不可用时，在分析中显式标注数据缺口。
+
 ### 3. 分析方法选择
 - [ ] 根据股票类型选择模型（成长股、价值股、周期股）
 - [ ] 是否需要特殊处理？（ST股、次新股、外资股）

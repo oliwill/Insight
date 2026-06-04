@@ -1,6 +1,6 @@
 # Handoff Snapshot
 
-Status date: 2026-06-03
+Status date: 2026-06-04
 
 ## What Is Working
 
@@ -99,4 +99,8 @@ Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a re
 - macOS notifications use `osascript`; on Windows the notification module prints fallback text.
 - `scripts/backtest_raycat.py` uses a fixed ticker/date list and is a source-specific utility, not a generic backtest importer.
 - HIMS.US and 03986.HK have been validated as end-to-end Obsidian write smoke examples for the current analysis pipeline.
-- Full investment-grade stock analysis still needs external finance skills for real-time GEX/options flow, insider/congressional trades, supply-chain mapping, and SEPA confirmation.
+- Full investment-grade stock analysis still needs external finance skills from `himself65/finance-skills` v8.0.1:
+  - market-analysis: `company-valuation`, `estimate-analysis`, `stock-correlation`, `stock-liquidity`, `sepa-strategy`, `earnings-preview`, `earnings-recap`, `options-payoff`, `etf-premium`, `yfinance-data`
+  - data-providers: `funda-data`, `finance-sentiment`, `tradingview-reader`, `hormuz-strait`
+  - social-readers: `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`, `opencli-reader`
+  - If any required skill is unavailable, explicitly record the data gap in the analysis.

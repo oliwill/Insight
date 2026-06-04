@@ -158,6 +158,7 @@ Thresholds: ≥75 high-conviction / 60–75 standard candidate / 45–60 watch /
 | NewsAPI | news enrichment | `NEWSAPI_KEY` |
 | Longbridge | HK/CN quotes and K-lines | Longbridge credentials |
 | Obsidian vault | prior theses, materials, Inbox evidence | `.env` paths |
+| External finance-skills | analyst-grade data, valuation, estimates, sentiment, TradingView, and read-only social/source readers | optional Claude Code skills from `himself65/finance-skills` |
 
 The pipeline is fault-tolerant: failed modules return `*_error` fields and the rest of the report can still be generated.
 

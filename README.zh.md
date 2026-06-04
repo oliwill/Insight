@@ -158,6 +158,7 @@ vault/
 | NewsAPI | 新闻增强 | `NEWSAPI_KEY` |
 | 长桥 | 港股/A 股报价和 K 线 | 长桥凭据 |
 | Obsidian vault | 历史 thesis、素材、Inbox 证据 | `.env` 路径 |
+| 外部 finance-skills | 专业数据、估值、分析师预期、情绪、TradingView 和只读社交/source readers | 可选 Claude Code skills：`himself65/finance-skills` |
 
 流水线容错：单个模块失败会返回 `*_error` 字段，不阻断其他模块生成报告。
 

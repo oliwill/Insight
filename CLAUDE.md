@@ -50,6 +50,9 @@ python trader_mcp.py
 python telegram_bot.py --polling
 python inbox_watcher.py
 python scripts/podwise_sync.py --list
+
+# External finance skills refresh
+npx skills add himself65/finance-skills
 ```
 
 ## Standard Analysis Workflow
@@ -72,28 +75,44 @@ When the user asks to analyze a stock, use this sequence unless they explicitly 
 
 2. **Run required finance skills for current data gaps**:
 
-   | Skill | Purpose | When |
+   External source of truth: `himself65/finance-skills` v8.0.1. Use the installed skill name that matches the canonical repo skill below; local installations may expose bare names such as `company-valuation`, plugin-prefixed names such as `finance-market-analysis:company-valuation`, or legacy `finance-skills-*` names.
+
+   | Canonical skill | Purpose | When |
    |---|---|---|
-   | `finance-skills-funda-data` | options flow/GEX, insider/congressional trading, analyst estimates, supply chain | every full stock analysis |
-   | `finance-skills-stock-correlation` | peer P/S baseline and related stocks | every full stock analysis |
-   | `finance-skills-finance-sentiment` | Reddit / X / Polymarket structured sentiment | every full stock analysis |
-   | `finance-skills-sepa-strategy` | Stage + trend-template + VCP setup | every full stock analysis |
-   | `finance-skills-earnings-preview` | consensus and beat/miss setup | within 30 days before earnings |
-   | `finance-skills-earnings-recap` | actual vs expected, reaction, call notes | after earnings |
-   | `finance-skills-stock-liquidity` | ADTV, spread, market impact | small-cap or thin-liquidity names |
-   | `finance-skills-twitter-reader` | KOL signals | when a named KOL or holding signal matters |
+   | `yfinance-data` | prices, financial statements, options chains, dividends, earnings, analyst recommendations | baseline lookup when local project data is missing, stale, or needs cross-checking |
+   | `funda-data` | analyst-grade research, filings, transcripts, options flow/GEX, insider/congressional trading, supply chain | every full stock analysis; required when any of these data gaps can change the thesis |
+   | `company-valuation` | DCF + relative + SOTP triangulation, WACC sensitivity, Bull/Base/Bear implied price | every comprehensive report with fair value, target price, or over/undervalued conclusion |
+   | `estimate-analysis` | EPS/revenue estimate revisions, estimate spread, growth projections, analyst accuracy | every full stock analysis and any earnings/guide-driven setup |
+   | `stock-correlation` | peer baseline, co-movement, pair-trading candidates, related stocks | every full stock analysis |
+   | `finance-sentiment` | Reddit / X / news / Polymarket structured sentiment | every full stock analysis when narrative, rumor, crowding, or event sentiment can move price |
+   | `sepa-strategy` | Minervini trend template, SEPA stage, VCP, entry rules, position sizing | every full stock analysis before calling a setup actionable |
+   | `stock-liquidity` | spreads, volume profile, market impact, Amihud ratio | small-cap, ADR, thin-liquidity names, or any sizing decision above watchlist size |
+   | `earnings-preview` | consensus, beat/miss history, analyst sentiment before earnings | within 30 days before earnings |
+   | `earnings-recap` | actual vs estimate, price reaction, margin trends after earnings | after earnings, before updating the thesis |
+   | `options-payoff` | interactive payoff curve for spreads, straddles, condors, screenshots, multi-leg positions | whenever the user discusses an options trade or asks for payoff / P&L visualization |
+   | `etf-premium` | ETF premium/discount vs NAV, AP arbitrage, gamma/dealer-driven surge decomposition | ETFs, leveraged/inverse/bond/crypto/international funds, or ETF GEX / NAV questions |
+   | `saas-valuation-compression` | private SaaS ARR multiple compression across rounds | SaaS private-market or funding-round valuation questions, not normal public-equity analysis |
+   | `tradingview-reader` | TradingView desktop quotes, full options chains with greeks/IV, screeners, chart state, watchlists, alerts | when the user asks for TradingView data or when local option-chain / IV / screener data is insufficient |
+   | `hormuz-strait` | Strait of Hormuz shipping, oil, insurance, and crisis timeline monitoring | energy, tanker, shipping, insurance, defense, and oil-price geopolitical risk analysis |
+   | `twitter-reader` | read-only Twitter/X research and KOL signals | when named KOLs, X posts, or X-native sentiment are part of the thesis |
+   | `telegram-reader` | read-only Telegram channel research | when a Telegram channel is a cited source |
+   | `discord-reader` | read-only Discord research | when a Discord community is a cited source |
+   | `linkedin-reader` | read-only LinkedIn feed / job-search signal | hiring, GTM, layoffs, executive or enterprise-sales channel checks |
+   | `yc-reader` | Y Combinator company data | startup/vendor/customer context, especially private company checks |
+   | `opencli-reader` | generic read-only fallback for 90+ sources such as Yahoo Finance, Bloomberg, Reuters, Eastmoney, Xueqiu, Reddit, Substack, arXiv | only when no dedicated finance skill covers the source; never invoke write operations |
 
-   Checklist:
+   Full-analysis checklist:
 
-   - [ ] `finance-skills-funda-data` when GEX, options flow, insider or congressional trades, analyst estimates, or supply-chain context can change the thesis. Use it for every full stock analysis.
-   - [ ] `finance-skills-stock-correlation` when peer P/S baselines, related stocks, or relative valuation can affect the conclusion.
-   - [ ] `finance-skills-finance-sentiment` when Reddit / X / Polymarket / rumor sentiment can move the setup or when structured market narrative matters.
-   - [ ] `finance-skills-sepa-strategy` when stage, trend-template, or VCP confirmation matters to the entry.
-   - [ ] `finance-skills-earnings-preview` within 30 days before earnings.
-   - [ ] `finance-skills-earnings-recap` after earnings, before updating the thesis.
-   - [ ] `finance-skills-stock-liquidity` for small-cap, ADR, or thin-liquidity names.
-   - [ ] `finance-skills-twitter-reader` when a named KOL or holding signal is part of the thesis.
-   - [ ] If a skill is unavailable or a gap remains, state the gap explicitly instead of implying coverage.
+   - [ ] Baseline data: `yfinance-data` or local `run_analysis.py` output is current enough for price, fundamentals, options, earnings, and ownership.
+   - [ ] Professional data: `funda-data` covers GEX/options flow, insider/congressional trades, supply-chain context, filings/transcripts, or explicitly records what remains unavailable.
+   - [ ] Valuation: `company-valuation` supports any target price or fair-value claim; `estimate-analysis` checks analyst revision momentum.
+   - [ ] Peers and setup: `stock-correlation` establishes comparable context; `sepa-strategy` confirms stage, trend template, VCP, entry, and sizing.
+   - [ ] Market structure: `stock-liquidity` checks tradability; `finance-sentiment` checks structured narrative/crowding; `tradingview-reader` is used when full option-chain greeks/IV, TradingView screener data, chart state, alerts, or watchlists matter.
+   - [ ] Event-specific tools: `earnings-preview` before earnings, `earnings-recap` after earnings, `options-payoff` for options trades, `etf-premium` for ETFs, `hormuz-strait` for oil/shipping/geopolitical exposure.
+   - [ ] Source-specific readers: prefer `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, or `yc-reader` when the source matches; use `opencli-reader` only as a read-only fallback.
+   - [ ] If a required skill is unavailable or a gap remains, state the gap explicitly instead of implying coverage.
+
+   Safety note: external reader/data skills run with agent permissions. Keep social/source readers read-only; never invoke write/post/trade operations. Installer risk flags were highest for `telegram-reader` and non-zero for `discord-reader`, `funda-data`, `twitter-reader`, and `tradingview-reader`, so use those only when the source is necessary for the thesis and record any unavailable data explicitly.
 
 3. **Write the analysis** using `write_analysis_to_obsidian()` or `scripts/analyze_stock.py` output path.
 
