@@ -143,6 +143,8 @@ python scheduler.py --status
 python scheduler.py --stop
 ```
 
+The Python scheduler calls `scan_inbox.py` and `run_review.py` in `--json` mode, and calls `update_dashboard.py --json --reason scheduled` so Dashboard updates stay aligned with the scheduled-task policy.
+
 `.env` schedule keys:
 
 ```env

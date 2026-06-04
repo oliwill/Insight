@@ -48,6 +48,22 @@ DEFAULT_SCHEDULE = {
 }
 
 
+def _task_arguments(script_name: str) -> list[str]:
+    """Build stable arguments for scheduler-managed task scripts."""
+    args: list[str] = []
+
+    if script_name in {"scan_inbox.py", "run_review.py", "update_dashboard.py"}:
+        args.append("--json")
+
+    if script_name == "update_dashboard.py":
+        args.extend(["--reason", "scheduled"])
+
+    if os.getenv("SCHEDULE_NOTIFY", "true").lower() == "true":
+        args.append("--notify")
+
+    return args
+
+
 def _get_schedule(key: str) -> str:
     """从环境变量读取调度配置，使用默认值"""
     env_key = f"SCHEDULE_{key.upper()}"
@@ -74,10 +90,7 @@ def run_task(script_name: str) -> bool:
         return False
 
     try:
-        notify_flag = "--notify" if os.getenv("SCHEDULE_NOTIFY", "true").lower() == "true" else ""
-        cmd = [sys.executable, str(script_path)]
-        if notify_flag:
-            cmd.append(notify_flag)
+        cmd = [sys.executable, str(script_path), *_task_arguments(script_name)]
 
         result = subprocess.run(
             cmd,
