@@ -83,6 +83,18 @@ When the user asks to analyze a stock, use this sequence unless they explicitly 
    | `finance-skills-stock-liquidity` | ADTV, spread, market impact | small-cap or thin-liquidity names |
    | `finance-skills-twitter-reader` | KOL signals | when a named KOL or holding signal matters |
 
+   Checklist:
+
+   - [ ] `finance-skills-funda-data` when GEX, options flow, insider or congressional trades, analyst estimates, or supply-chain context can change the thesis. Use it for every full stock analysis.
+   - [ ] `finance-skills-stock-correlation` when peer P/S baselines, related stocks, or relative valuation can affect the conclusion.
+   - [ ] `finance-skills-finance-sentiment` when Reddit / X / Polymarket / rumor sentiment can move the setup or when structured market narrative matters.
+   - [ ] `finance-skills-sepa-strategy` when stage, trend-template, or VCP confirmation matters to the entry.
+   - [ ] `finance-skills-earnings-preview` within 30 days before earnings.
+   - [ ] `finance-skills-earnings-recap` after earnings, before updating the thesis.
+   - [ ] `finance-skills-stock-liquidity` for small-cap, ADR, or thin-liquidity names.
+   - [ ] `finance-skills-twitter-reader` when a named KOL or holding signal is part of the thesis.
+   - [ ] If a skill is unavailable or a gap remains, state the gap explicitly instead of implying coverage.
+
 3. **Write the analysis** using `write_analysis_to_obsidian()` or `scripts/analyze_stock.py` output path.
 
 4. **Refresh Dashboard separately when needed**:

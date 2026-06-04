@@ -54,6 +54,16 @@ scripts/analyze_stock.py
 | `交叉引用` | `data.correlation.CorrelationAnalyzer` |
 | `预测验证` | `backtest.runner.BacktestRunner` / `backtest.review.ReviewScheduler` |
 
-## Remaining External Skill Gap
+## Remaining External Skill Gap Checklist
 
-The local modules provide baseline data and structure. For full investment-grade analysis, Claude Code should still call finance skills listed in `CLAUDE.md` when the user requests a stock analysis, especially for real-time GEX/options flow, insider/congressional trading, supply-chain mapping, SEPA stage confirmation, and cross-source sentiment.
+The local modules provide baseline data and structure. For full investment-grade analysis, Claude Code should still call finance skills listed in `CLAUDE.md` when the user requests a stock analysis.
+
+- [ ] `finance-skills-funda-data` for GEX, options flow, insider/congressional trading, analyst estimates, and supply-chain mapping
+- [ ] `finance-skills-stock-correlation` for peer P/S baselines and related stocks
+- [ ] `finance-skills-finance-sentiment` for structured cross-source sentiment
+- [ ] `finance-skills-sepa-strategy` for SEPA stage / trend-template / VCP confirmation
+- [ ] `finance-skills-earnings-preview` within 30 days before earnings
+- [ ] `finance-skills-earnings-recap` after earnings
+- [ ] `finance-skills-stock-liquidity` for small-cap or thin-liquidity names
+- [ ] `finance-skills-twitter-reader` when a named KOL or holding signal matters
+- [ ] If the required skill cannot be used, record the gap explicitly in the analysis
