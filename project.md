@@ -121,6 +121,7 @@
 
 | 任务 | 优先级 | 说明 |
 |---|---|---|
+| GitHub 主线合并 | P1 | 待办：当前分支已完成验证，但与远端 `master` 不是快进关系，需要单独处理合并冲突。 |
 | 自动化入口测试边界 | P2 | 给 watcher / bot / scheduler 补参数解析、dry-run 和 fallback 测试。 |
 | 外部 finance skills 缺口清单化 | P2 | 把 GEX、insider、supply chain、SEPA、sentiment 的调用时机写成 checklist。 |
 
