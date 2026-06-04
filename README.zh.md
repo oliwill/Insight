@@ -68,6 +68,9 @@ python run_analysis.py --inbox
 python scripts/scan_inbox.py --dry-run --json
 python scripts/run_review.py --days-after 30 --lookback 90
 python scripts/update_dashboard.py --json
+python scripts/update_dashboard.py --json --reason scheduled
+python scripts/update_dashboard.py --json --reason manual
+python scripts/update_dashboard.py --restore-backup --json
 
 # 可选工具
 python inbox_watcher.py

@@ -1,6 +1,6 @@
 # trader-obsidian 项目进度
 
-更新时间：2026-05-27
+更新时间：2026-06-04
 维护方式：每次完成阶段性开发、修复关键问题或调整方向后更新本文件。
 
 ## 1. 项目定位
@@ -114,7 +114,6 @@
 
 | 任务 | 优先级 | 状态 | 下一步 |
 |---|---|---|---|
-| Git 可交付基线整理 | P0 | 进行中 | 在 `codex/p0-delivery-baseline` 上确认当前改动分组，并形成可提交状态。 |
 | 测试环境与 smoke test 入口 | P0 | 已完成 | 使用 `requirements-dev.txt` 安装测试依赖后运行 `scripts/windows/run_smoke_tests.ps1`。 |
 | 最小回归清单固化 | P0 | 已完成 | 保持 runbook 中的 py_compile、pytest、Inbox dry-run、review ticker discovery 为默认验证入口。 |
 
@@ -137,6 +136,7 @@
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-04 | 收口 Git 可交付基线 | `codex/p0-delivery-baseline` 上的 smoke、scheduler 和 Dashboard 策略改动均已提交，工作区保持清洁。 |
 | 2026-06-03 | 完成 Dashboard 更新策略复核 | `scripts/update_dashboard.py` 新增 `--reason` / `--restore-backup`；Dashboard 改为备份 + 原子替换写入，并在 runbook / scheduler 文档中记录自动、手动和恢复路径。 |
 | 2026-06-03 | 固化 HIMS.US / 03986.HK 写入型 smoke example | 新增 `scripts/windows/run_write_smoke_examples.ps1` 和 `scripts/verify_write_smoke.py`；HIMS.US wiki+chart 验证通过，03986.HK wiki 验证通过。 |
 | 2026-06-03 | 完成 Windows Task Scheduler 实机验证 | 新增 `scripts/windows/verify_scheduled_tasks.ps1`；`trader-obsidian-inbox` / `review` / `dashboard` 三条任务注册、触发和日志验证通过。 |

@@ -42,6 +42,8 @@ python run_analysis.py --inbox
 python scripts/scan_inbox.py --dry-run --json
 python scripts/run_review.py --days-after 30 --lookback 90
 python scripts/update_dashboard.py --json
+python scripts/update_dashboard.py --json --reason scheduled
+python scripts/update_dashboard.py --restore-backup --json
 
 # Optional interfaces
 python trader_mcp.py
@@ -83,11 +85,14 @@ When the user asks to analyze a stock, use this sequence unless they explicitly 
 
 3. **Write the analysis** using `write_analysis_to_obsidian()` or `scripts/analyze_stock.py` output path.
 
-4. **Update dashboard** after a completed write:
+4. **Refresh Dashboard separately when needed**:
 
    ```bash
-   python run_analysis.py --dashboard
+   python scripts/update_dashboard.py --json --reason post-analysis
+   python scripts/update_dashboard.py --json --reason manual
    ```
+
+   Use the daily scheduled refresh or an explicit operator refresh; do not auto-run a Dashboard update after every single ticker by default.
 
 ## Cockpit Architecture
 
