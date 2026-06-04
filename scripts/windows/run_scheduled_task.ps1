@@ -87,7 +87,7 @@ function Get-ReviewArgs {
 }
 
 function Get-DashboardArgs {
-    $args = @("scripts\update_dashboard.py", "--json")
+    $args = @("scripts\update_dashboard.py", "--json", "--reason", "scheduled")
     if ($Notify) { $args += "--notify" }
     return $args
 }

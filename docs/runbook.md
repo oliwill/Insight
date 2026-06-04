@@ -86,6 +86,8 @@ python scripts/run_review.py --list-tickers --json
 
 # Update Dashboard
 python scripts/update_dashboard.py --json
+python scripts/update_dashboard.py --json --reason manual
+python scripts/update_dashboard.py --restore-backup --json
 ```
 
 For a full report write:
@@ -136,6 +138,23 @@ python scripts/run_review.py --list-tickers --json
 python scripts/run_review.py --days-after 30 --lookback 90
 ```
 
+### Update Dashboard
+
+```bash
+python scripts/update_dashboard.py --json --reason manual
+python scripts/update_dashboard.py --json --reason post-analysis
+python scripts/update_dashboard.py --restore-backup --json
+```
+
+Dashboard update strategy:
+
+1. scheduled task uses `--reason scheduled`
+2. manual maintenance uses `--reason manual`
+3. batch refresh after a multi-stock run uses `--reason post-analysis`
+4. restore uses `--restore-backup`
+
+The current policy is conservative: do not auto-update the Dashboard after every single `scripts/analyze_stock.py <TICKER>` run. Use the daily scheduled refresh plus explicit manual or batch refreshes.
+
 ### Register Windows scheduled tasks
 
 Run from project root in PowerShell:
@@ -161,6 +180,12 @@ This will:
 - re-register `trader-obsidian-dashboard`
 - trigger each task once
 - print `LastRunTime`, `LastTaskResult`, and the newly created scheduler log files
+
+If a scheduled Dashboard update looks wrong:
+
+1. run `python scripts/update_dashboard.py --restore-backup --json`
+2. rerun `python scripts/update_dashboard.py --json --reason manual`
+3. inspect `logs\scheduler\dashboard-*.log`
 
 ### Backtest raycat fixed list
 

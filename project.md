@@ -122,7 +122,6 @@
 
 | 任务 | 优先级 | 说明 |
 |---|---|---|
-| Dashboard 更新策略复核 | P1 | 明确何时自动更新、何时手动更新，以及失败时如何恢复。 |
 | 自动化入口测试边界 | P2 | 给 watcher / bot / scheduler 补参数解析、dry-run 和 fallback 测试。 |
 | 外部 finance skills 缺口清单化 | P2 | 把 GEX、insider、supply chain、SEPA、sentiment 的调用时机写成 checklist。 |
 
@@ -138,6 +137,7 @@
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-03 | 完成 Dashboard 更新策略复核 | `scripts/update_dashboard.py` 新增 `--reason` / `--restore-backup`；Dashboard 改为备份 + 原子替换写入，并在 runbook / scheduler 文档中记录自动、手动和恢复路径。 |
 | 2026-06-03 | 固化 HIMS.US / 03986.HK 写入型 smoke example | 新增 `scripts/windows/run_write_smoke_examples.ps1` 和 `scripts/verify_write_smoke.py`；HIMS.US wiki+chart 验证通过，03986.HK wiki 验证通过。 |
 | 2026-06-03 | 完成 Windows Task Scheduler 实机验证 | 新增 `scripts/windows/verify_scheduled_tasks.ps1`；`trader-obsidian-inbox` / `review` / `dashboard` 三条任务注册、触发和日志验证通过。 |
 | 2026-06-03 | 修复 review runner 的 Windows PowerShell 兼容问题 | `run_scheduled_task.ps1` 改为 `Start-Process` + stdout/stderr 文件重定向，避免 loguru stderr 被误判为任务失败。 |

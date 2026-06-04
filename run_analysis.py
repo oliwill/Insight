@@ -15,6 +15,7 @@
 """
 import json
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -336,8 +337,75 @@ created: {datetime.now().strftime('%Y-%m-%d %H:%M')}
         print(f"Error creating task: {e}")
         return None
 
+def _count_index_rows(index_markdown: str) -> int:
+    count = 0
+    for line in index_markdown.splitlines():
+        if not line.startswith("|") or "---" in line or "代码" in line:
+            continue
+        parts = [p.strip() for p in line.split("|") if p.strip()]
+        if parts:
+            count += 1
+    return count
 
-def update_dashboard():
+
+def _count_pending_tasks(tasks_dir: Path) -> int:
+    pending_tasks = 0
+    if tasks_dir.exists():
+        for task_file in tasks_dir.glob("*.md"):
+            text = task_file.read_text(encoding="utf-8")
+            if "status: pending" in text:
+                pending_tasks += 1
+    return pending_tasks
+
+
+def _dashboard_backup_path(dashboard_path: Path) -> Path:
+    return dashboard_path.with_name(f"{dashboard_path.name}.bak")
+
+
+def _build_dashboard_markdown(
+    index_markdown: str,
+    recent_logs: List[Dict],
+    pending_tasks: int,
+    update_reason: str,
+) -> str:
+    dashboard = f"""# 投资分析 Dashboard
+
+> 最后更新: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+> 更新来源: {update_reason}
+
+## 概览
+
+- **跟踪股票**: {_count_index_rows(index_markdown)}
+- **待处理任务**: {pending_tasks}
+- **最近活动条数**: {len(recent_logs)}
+
+## 最近活动
+
+"""
+    for log in recent_logs:
+        dashboard += f"- **{log['timestamp']}** {log['action']}\n"
+        if log.get("detail"):
+            dashboard += f"  - {log['detail'][:100]}...\n"
+
+    dashboard += f"\n## 股票总览\n\n{index_markdown}\n"
+    return dashboard
+
+
+def restore_dashboard_backup(dashboard_path: Optional[Path] = None, verbose: bool = True) -> Optional[Path]:
+    target_path = dashboard_path or DASHBOARD_PATH
+    backup_path = _dashboard_backup_path(target_path)
+
+    if not backup_path.exists():
+        return None
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(backup_path, target_path)
+    if verbose:
+        print(f"Dashboard restored from backup: {backup_path}")
+    return backup_path
+
+
+def update_dashboard(update_reason: str = "manual", verbose: bool = True) -> Dict[str, object]:
     """
     更新 Dashboard.md
 
@@ -351,46 +419,38 @@ def update_dashboard():
     """
     mm = MemoryManager()
 
-    # 读取 index
     index = mm.get_index()
-
-    # 统计任务
-    pending_tasks = 0
-    if TASKS_DIR.exists():
-        for task_file in TASKS_DIR.glob("*.md"):
-            text = task_file.read_text(encoding="utf-8")
-            if "status: pending" in text:
-                pending_tasks += 1
-
-    # 读取最近日志
+    pending_tasks = _count_pending_tasks(TASKS_DIR)
     recent_logs = mm.get_recent_log(n=5)
+    dashboard = _build_dashboard_markdown(
+        index_markdown=index,
+        recent_logs=recent_logs,
+        pending_tasks=pending_tasks,
+        update_reason=update_reason,
+    )
 
-    # 构建 Dashboard
-    dashboard = f"""# 投资分析 Dashboard
+    DASHBOARD_PATH.parent.mkdir(parents=True, exist_ok=True)
+    backup_path = _dashboard_backup_path(DASHBOARD_PATH)
+    temp_path = DASHBOARD_PATH.with_name(f"{DASHBOARD_PATH.name}.tmp")
 
-> 最后更新: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    if DASHBOARD_PATH.exists():
+        shutil.copy2(DASHBOARD_PATH, backup_path)
 
-## 概览
+    temp_path.write_text(dashboard, encoding="utf-8")
+    temp_path.replace(DASHBOARD_PATH)
 
-- **跟踪股票**: {index.count('|') if '|' in index else 0}
-- **待处理任务**: {pending_tasks}
-
-## 最近活动
-
-"""
-    for log in recent_logs:
-        dashboard += f"- **{log['timestamp']}** {log['action']}\n"
-        if log.get("detail"):
-            dashboard += f"  - {log['detail'][:100]}...\n"
-
-    dashboard += f"\n## 股票总览\n\n{index}\n"
-
-    try:
-        DASHBOARD_PATH.parent.mkdir(parents=True, exist_ok=True)
-        DASHBOARD_PATH.write_text(dashboard, encoding="utf-8")
+    result = {
+        "dashboard_path": str(DASHBOARD_PATH),
+        "backup_path": str(backup_path) if backup_path.exists() else "",
+        "tracked_stocks": _count_index_rows(index),
+        "pending_tasks": pending_tasks,
+        "recent_logs": len(recent_logs),
+        "update_reason": update_reason,
+        "timestamp": datetime.now().isoformat(),
+    }
+    if verbose:
         print(f"Dashboard updated: {DASHBOARD_PATH}")
-    except Exception as e:
-        print(f"Error updating dashboard: {e}")
+    return result
 
 
 # ========== 扫描模式 ==========

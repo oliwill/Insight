@@ -61,14 +61,18 @@ function Wait-TaskCompletion {
         [Parameter(Mandatory = $true)]
         [string]$TaskName,
         [Parameter(Mandatory = $true)]
+        [datetime]$TriggeredAt,
+        [Parameter(Mandatory = $true)]
         [int]$TimeoutSeconds
     )
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
         $task = Get-ScheduledTask -TaskName $TaskName
-        if ($task.State -ne "Running") {
-            return Get-ScheduledTaskInfo -TaskName $TaskName
+        $info = Get-ScheduledTaskInfo -TaskName $TaskName
+        $hasCurrentRun = $info.LastRunTime -ge $TriggeredAt.AddSeconds(-2)
+        if ($hasCurrentRun -and $task.State -ne "Running") {
+            return $info
         }
         Start-Sleep -Seconds 2
     } while ((Get-Date) -lt $deadline)
@@ -80,9 +84,10 @@ foreach ($taskName in $taskNames) {
     Write-Host ""
     Write-Host "==> Trigger $taskName"
     $before = Get-ChildItem -Path $LogDir -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+    $triggeredAt = Get-Date
     Start-ScheduledTask -TaskName $taskName
 
-    $info = Wait-TaskCompletion -TaskName $taskName -TimeoutSeconds $WaitSeconds
+    $info = Wait-TaskCompletion -TaskName $taskName -TriggeredAt $triggeredAt -TimeoutSeconds $WaitSeconds
     Write-Host "LastRunTime : $($info.LastRunTime)"
     Write-Host "LastTaskResult : $($info.LastTaskResult)"
 
@@ -100,6 +105,10 @@ foreach ($taskName in $taskNames) {
         foreach ($log in $newLogs) {
             Write-Host "Log: $($log.FullName)"
         }
+    }
+
+    if ($info.LastTaskResult -ne 0) {
+        throw "$taskName failed with LastTaskResult=$($info.LastTaskResult)"
     }
 }
 

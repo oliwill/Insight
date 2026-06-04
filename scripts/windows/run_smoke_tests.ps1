@@ -100,7 +100,8 @@ try {
                 "tests\test_yahoo_symbol.py",
                 "tests\test_section_write.py",
                 "tests\test_report_generator.py",
-                "tests\test_backtest_review.py"
+                "tests\test_backtest_review.py",
+                "tests\test_dashboard_update.py"
             )
     }
     else {

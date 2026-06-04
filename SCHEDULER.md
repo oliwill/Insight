@@ -19,9 +19,18 @@ python scripts/run_review.py AAPL.US NVDA.US --notify
 
 python scripts/update_dashboard.py --json
 python scripts/update_dashboard.py --notify
+python scripts/update_dashboard.py --json --reason scheduled
+python scripts/update_dashboard.py --restore-backup --json
 ```
 
 `--notify` uses macOS `osascript`; on Windows it falls back to console output.
+
+For Dashboard, use:
+
+- scheduled refresh: `scripts/update_dashboard.py --json --reason scheduled`
+- operator refresh: `scripts/update_dashboard.py --json --reason manual`
+- batch refresh after analysis/review work: `scripts/update_dashboard.py --json --reason post-analysis`
+- recovery: `scripts/update_dashboard.py --restore-backup --json`
 
 ## Option A: Windows Task Scheduler
 
@@ -41,13 +50,19 @@ Register the three scheduled tasks for the current Windows user:
 powershell -ExecutionPolicy Bypass -File scripts\windows\register_scheduled_tasks.ps1 -Force
 ```
 
+Validate registration and one-shot execution:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\verify_scheduled_tasks.ps1 -PythonExe ".\.venv\Scripts\python.exe" -DryRunInbox -Force
+```
+
 Defaults:
 
 | Task | Frequency | Command |
 |---|---:|---|
 | `trader-obsidian-inbox` | every 30 minutes | `scripts\scan_inbox.py --json` |
 | `trader-obsidian-review` | daily 09:00 | `scripts\run_review.py --days-after 30 --lookback 90 --json` |
-| `trader-obsidian-dashboard` | daily 08:00 | `scripts\update_dashboard.py --json` |
+| `trader-obsidian-dashboard` | daily 08:00 | `scripts\update_dashboard.py --json --reason scheduled` |
 
 Useful options:
 
