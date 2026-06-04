@@ -122,7 +122,6 @@
 | 任务 | 优先级 | 说明 |
 |---|---|---|
 | GitHub 主线合并 | P1 | 待办：当前分支已完成验证，但与远端 `master` 不是快进关系，需要单独处理合并冲突。 |
-| 自动化入口测试边界 | P2 | 给 watcher / bot / scheduler 补参数解析、dry-run 和 fallback 测试。 |
 | 外部 finance skills 缺口清单化 | P2 | 把 GEX、insider、supply chain、SEPA、sentiment 的调用时机写成 checklist。 |
 
 ### Later
@@ -137,6 +136,7 @@
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-04 | 补齐自动化入口测试边界 | 新增 `tests/test_automation_entrypoints.py`，覆盖 `scan_inbox.py` 的 dry-run / fallback、`run_review.py --list-tickers`、`update_dashboard.py` 的 scheduled reason 与 restore 路径。 |
 | 2026-06-04 | 收口 Git 可交付基线 | `codex/p0-delivery-baseline` 上的 smoke、scheduler 和 Dashboard 策略改动均已提交，工作区保持清洁。 |
 | 2026-06-03 | 完成 Dashboard 更新策略复核 | `scripts/update_dashboard.py` 新增 `--reason` / `--restore-backup`；Dashboard 改为备份 + 原子替换写入，并在 runbook / scheduler 文档中记录自动、手动和恢复路径。 |
 | 2026-06-03 | 固化 HIMS.US / 03986.HK 写入型 smoke example | 新增 `scripts/windows/run_write_smoke_examples.ps1` 和 `scripts/verify_write_smoke.py`；HIMS.US wiki+chart 验证通过，03986.HK wiki 验证通过。 |
