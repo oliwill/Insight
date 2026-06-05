@@ -1,6 +1,6 @@
 # trader-obsidian 项目进度
 
-更新时间：2026-06-04
+更新时间：2026-06-05
 维护方式：每次完成阶段性开发、修复关键问题或调整方向后更新本文件。
 
 ## 1. 项目定位
@@ -92,7 +92,7 @@
 
 - 确认 Windows 环境下调度方案是否需要独立文档或脚本封装。
 - 为常用入口建立更明确的 smoke test 清单。
-- 补齐自动化入口的回归测试覆盖，尤其是 watcher / bot / scheduler 的可测试边界。
+- 继续维护自动化入口回归覆盖，尤其是 watcher / bot / scheduler 的参数与副作用边界。
 
 ### M4：投资级分析增强
 
@@ -137,6 +137,7 @@
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-05 | 收紧 M3 自动化入口回归边界 | 新增 `tests/test_m3_boundaries.py`，覆盖 Telegram bot helper/command、Inbox watcher debounce / scan、Windows scheduler 脚本契约；`run_smoke_tests.ps1` 纳入 bot / watcher / scheduler 编译和自动化入口测试；补齐 `notify_telegram()` fallback。 |
 | 2026-06-04 | 融合 finance-skills v8.0.1 更新 | 通过 `npx skills add himself65/finance-skills` 安装 24 个本地 skills 到 `.agents/skills/`，生成 `skills-lock.json`，并将最新 market-analysis / data-providers / social-readers 清单同步到项目文档和本地 `/think` 检查清单。 |
 | 2026-06-04 | 补齐外部 finance skills 缺口清单化 | 在 `CLAUDE.md` 和 `INTEGRATION_PLAN.md` 中补充 full-analysis checklist，明确 GEX / insider / supply chain / SEPA / sentiment / earnings / liquidity 的调用时机。 |
 | 2026-06-04 | 补齐自动化入口测试边界 | 新增 `tests/test_automation_entrypoints.py`，覆盖 `scan_inbox.py` 的 dry-run / fallback、`run_review.py --list-tickers`、`update_dashboard.py` 的 scheduled reason 与 restore 路径。 |

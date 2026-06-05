@@ -1,6 +1,6 @@
 # Handoff Snapshot
 
-Status date: 2026-06-04
+Status date: 2026-06-05
 
 ## What Is Working
 
@@ -37,8 +37,8 @@ Status date: 2026-06-04
 
 ```bash
 git status --short
-python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py
-PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_backtest_review.py
+python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py notification.py
+PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_backtest_review.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
 python -c "from config import Config; print(Config.get_wiki_dir())"
 python scripts/scan_inbox.py --dry-run --json
 ```
@@ -77,6 +77,11 @@ This command was validated on 2026-06-03 and produced successful `LastTaskResult
 - `trader-obsidian-inbox`
 - `trader-obsidian-review`
 - `trader-obsidian-dashboard`
+
+M3 automation regression guards:
+
+- `tests/test_m3_boundaries.py` covers Telegram bot helper/command contracts, Inbox watcher debounce and scan contracts, and Windows script invariants.
+- `scripts/windows/run_smoke_tests.ps1` compiles `telegram_bot.py`, `inbox_watcher.py`, and `scheduler.py`, and includes automation/scheduler/M3 tests in the pytest set.
 
 Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a report written to Obsidian.
 

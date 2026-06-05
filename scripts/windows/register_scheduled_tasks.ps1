@@ -22,6 +22,7 @@ function New-RunnerAction {
 
     $runnerArgs = @(
         "-NoProfile",
+        "-WindowStyle", "Hidden",
         "-ExecutionPolicy", "Bypass",
         "-File", "`"$Runner`"",
         "-Task", $TaskName,

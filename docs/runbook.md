@@ -66,11 +66,11 @@ Manual equivalent:
 
 ```bash
 # Verify imports and syntax
-python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py
+python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py notification.py telegram_bot.py inbox_watcher.py scheduler.py
 python -m py_compile data/manager.py data/earnings.py data/liquidity.py data/options.py data/correlation.py data/etf.py data/search.py
 
 # Verify regression guards
-PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py
+PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_backtest_review.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
 
 # Verify config is visible
 python -c "from config import Config; print(Config.get_wiki_dir())"
@@ -180,6 +180,13 @@ This will:
 - re-register `trader-obsidian-dashboard`
 - trigger each task once
 - print `LastRunTime`, `LastTaskResult`, and the newly created scheduler log files
+
+M3 regression boundary:
+
+- `tests/test_m3_boundaries.py` checks Telegram bot authorization/normalization/write and scan command contracts.
+- `tests/test_m3_boundaries.py` checks Inbox watcher debounce, Markdown-only filtering, scan command, and notification fallback contracts.
+- `tests/test_m3_boundaries.py` checks Windows scheduler scripts keep hidden PowerShell windows, scheduled Dashboard reason, stdout/stderr logging, Task Scheduler verification polling, and smoke wrapper coverage.
+- `scripts\windows\run_smoke_tests.ps1` includes `telegram_bot.py`, `inbox_watcher.py`, `scheduler.py`, `tests\test_automation_entrypoints.py`, `tests\test_scheduler.py`, and `tests\test_m3_boundaries.py`.
 
 If a scheduled Dashboard update looks wrong:
 

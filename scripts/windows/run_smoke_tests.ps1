@@ -61,7 +61,11 @@ try {
             "config.py",
             "run_analysis.py",
             "scripts\analyze_stock.py",
-            "trader_mcp.py"
+            "trader_mcp.py",
+            "notification.py",
+            "telegram_bot.py",
+            "inbox_watcher.py",
+            "scheduler.py"
         )
 
     Invoke-PythonStep `
@@ -101,7 +105,10 @@ try {
                 "tests\test_section_write.py",
                 "tests\test_report_generator.py",
                 "tests\test_backtest_review.py",
-                "tests\test_dashboard_update.py"
+                "tests\test_dashboard_update.py",
+                "tests\test_automation_entrypoints.py",
+                "tests\test_scheduler.py",
+                "tests\test_m3_boundaries.py"
             )
     }
     else {

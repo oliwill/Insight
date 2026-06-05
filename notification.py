@@ -13,6 +13,8 @@ import subprocess
 from datetime import datetime
 from typing import Optional
 
+import requests
+
 
 def notify(title: str, message: str, sound: bool = True) -> bool:
     """
@@ -61,6 +63,31 @@ def notify_error(title: str, message: str) -> bool:
 def notify_success(title: str, message: str) -> bool:
     """发送成功通知"""
     return notify(f"✅ {title}", message, sound=True)
+
+
+def notify_telegram(title: str, message: str) -> bool:
+    """发送 Telegram 通知；未配置时退回本地通知。"""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    user_id = os.getenv("TELEGRAM_USER_ID")
+
+    if not token or not user_id:
+        return notify(title, message)
+
+    text = f"{title}\n{message}".strip()
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": user_id, "text": text},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("ok"):
+            return True
+    except Exception:
+        pass
+
+    return notify(title, message)
 
 
 # ========== CLI 测试 ==========
