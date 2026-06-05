@@ -31,8 +31,8 @@ Core distinction:
 ## Quick Start
 
 ```bash
-git clone https://github.com/oliwill/obsidiantrader.git
-cd obsidiantrader
+git clone https://github.com/oliwill/Insight.git
+cd Insight
 pip install -r requirements.txt
 cp .env.example .env
 ```
@@ -50,6 +50,22 @@ ANALYSIS_TIMEOUT=30
 ```
 
 Optional integrations are documented in `.env.example`: Longbridge, NewsAPI, Telegram bot, Inbox watcher folders, Podwise, and scheduler cron strings.
+
+## Public AI Skill
+
+Users who want the research workflow without installing the full local pipeline can start with the reusable skill:
+
+```text
+skills/stock-research-cockpit/
+```
+
+The skill packages the core workflow as AI instructions:
+
+- Skill-only mode for any AI agent that can read the skill folder.
+- Local companion mode when this repo, CLI, or MCP server is available.
+- External finance-skills mode for richer valuation, sentiment, source-reader, and market-structure coverage.
+
+It preserves the core product boundary: evidence-backed research, five-dimension Research Score, independent Timing State, data-gap disclosure, and no trade execution.
 
 ## Commands
 

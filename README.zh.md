@@ -31,8 +31,8 @@ Obsidian Analysis wiki + Dashboard + Tasks
 ## 快速上手
 
 ```bash
-git clone https://github.com/oliwill/obsidiantrader.git
-cd obsidiantrader
+git clone https://github.com/oliwill/Insight.git
+cd Insight
 pip install -r requirements.txt
 cp .env.example .env
 ```
@@ -50,6 +50,22 @@ ANALYSIS_TIMEOUT=30
 ```
 
 可选集成见 `.env.example`：长桥、NewsAPI、Telegram bot、Inbox watcher 目录、Podwise、scheduler cron 字符串。
+
+## Public AI Skill
+
+如果用户暂时不想安装完整本地管线，可以先使用可分发 skill：
+
+```text
+skills/stock-research-cockpit/
+```
+
+这个 skill 把核心研究流程封装成 AI 指令：
+
+- Skill-only 模式：任何能读取该 skill 目录的 AI agent 都可以使用。
+- Local companion 模式：当本 repo、CLI 或 MCP server 可用时，调用本地数据和 Obsidian 工作流。
+- External finance-skills 模式：接入估值、情绪、source-reader、市场结构等外部 finance skills。
+
+它保留产品边界：证据驱动研究、五维 Research Score、独立 Timing State、数据缺口披露、不执行交易。
 
 ## 常用命令
 
