@@ -15,6 +15,7 @@ Status date: 2026-06-05
 | Timeline backtesting with extended metrics | implemented | `backtest.runner.BacktestRunner` |
 | Data-source fallback diagnostics | implemented | `data.manager.DataManager.get_source_status()` |
 | Report quality evaluator | implemented | `analyzer.report_quality.ReportQualityEvaluator` |
+| Public AI skill | implemented | `skills/stock-research-cockpit` |
 | Scheduled review | implemented | `scripts/run_review.py` |
 | MCP server | implemented | `python trader_mcp.py` |
 | Telegram bot | implemented | `python telegram_bot.py --polling` |
@@ -94,6 +95,12 @@ M4 investment-grade regression guards:
 - `tests/test_data_source_resilience.py` covers Longbridge-to-Yahoo fallback and source-attempt diagnostics.
 - `tests/test_report_quality.py` covers report title/data-time header, required sections, Research Score / Timing State separation, and data-gap disclosure.
 - `scripts/windows/run_smoke_tests.ps1` compiles `analyzer/report_quality.py` and includes the M4 tests above.
+
+Public skill distribution:
+
+- `skills/stock-research-cockpit` is the first reusable AI skill version of the research workflow.
+- It supports skill-only mode, local companion mode, and optional external finance skills.
+- `skills/stock-research-cockpit/evals/evals.json` contains the initial qualitative test prompts; full with-skill/baseline eval viewer runs are still future work.
 
 Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a report written to Obsidian.
 

@@ -27,6 +27,7 @@
 | 回测扩展指标 | 已实现 | `backtest.core.BacktestResult` |
 | 数据源降级诊断 | 已实现 | `data.manager.DataManager.get_source_status()` |
 | 报告质量评估器 | 已实现 | `analyzer.report_quality.ReportQualityEvaluator` |
+| 可分发 AI skill | 已实现 | `skills/stock-research-cockpit` |
 | 定期复盘 | 已实现 | `scripts/run_review.py` |
 | MCP 服务 | 已实现 | `python trader_mcp.py` |
 | Telegram Bot | 已实现 | `python telegram_bot.py --polling` |
@@ -36,6 +37,7 @@
 | Obsidian section 安全写入测试 | 已实现 | `tests/test_section_write.py` |
 | 报告生成渲染回归测试 | 已实现 | `tests/test_report_generator.py` |
 | 报告质量回归测试 | 已实现 | `tests/test_report_quality.py` |
+| Stock Research Cockpit skill | 已实现 | `skills/stock-research-cockpit/evals/evals.json` |
 
 ## 3. 关键项目约束
 
@@ -139,6 +141,7 @@
 
 | 方向 | 价值 | 备注 |
 |---|---|---|
+| Skill 触发评估与打包 | 降低公开分发风险 | 后续可用 skill-creator eval viewer 做 with-skill / baseline 对比，并打包 `.skill`。 |
 | 外部实时/专业数据补齐 | 提高投资级分析完整性 | 继续通过 finance-skills 补 GEX、内部人、供应链、SEPA、TradingView IV/Greeks 等。 |
 
 ### Done

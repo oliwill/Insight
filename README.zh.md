@@ -26,6 +26,7 @@ Obsidian Analysis wiki + Dashboard + Tasks
 | Research Score | 五维公司/投资 thesis 质量评分 | `## 五维打分` |
 | Timing State | 独立于公司质量的交易时机状态机 | `Ready / Wait / Watch / Avoid` |
 | Backtest | 在持有窗口后验证历史时间线信号 | `## 预测验证` + `output/review_*` |
+| Public skill | 给没有完整本地环境的用户复用 AI 研究工作流 | `skills/stock-research-cockpit` |
 
 ## 快速上手
 
@@ -172,6 +173,7 @@ vault/
 | `input.evidence` | 从 wiki/materials/Inbox 抽取结构化证据 |
 | `analyzer.report_generator` | 生成最终 Markdown 报告 |
 | `analyzer.report_quality` | 检查报告结构、数据缺口披露和 Research/Timing 分离 |
+| `skills/stock-research-cockpit` | 可分发的股票研究 cockpit AI skill |
 | `memory.manager` | Obsidian wiki、Materials、时间线、Dashboard 持久化 |
 | `backtest.runner` / `backtest.review` | 时间线信号验证、扩展指标和复盘报告 |
 | `trader_mcp.py` | 面向 Claude Desktop / MCP 客户端的 MCP server |

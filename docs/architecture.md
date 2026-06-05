@@ -39,6 +39,7 @@ flowchart TD
 | `analyzer/timing_engine.py` | trade-timing state machine |
 | `analyzer/report_generator.py` | final Markdown report |
 | `analyzer/report_quality.py` | report structure, data-gap, and Research/Timing separation checks |
+| `skills/stock-research-cockpit/` | reusable AI skill for public stock research cockpit workflows |
 | `memory/manager.py` | wiki/Materials/index/log persistence |
 | `backtest/runner.py` | timeline signal parsing, verification, and extended metrics |
 | `backtest/review.py` | scheduled review workflow |

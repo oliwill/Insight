@@ -1,0 +1,20 @@
+{
+  "skill_name": "stock-research-cockpit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "帮我分析一下 AAPL，现在还能不能买？我想要一个清晰但不要太长的结论。",
+      "expected_output": "Produces a compact Cockpit Summary, separates Research Score from Timing State, avoids a direct buy command, and discloses any missing live data."
+    },
+    {
+      "id": 2,
+      "prompt": "我有一段关于 HIMS 的 Obsidian 笔记：营收增长很快，但我担心监管和估值。请帮我转成股票研究报告。",
+      "expected_output": "Treats the note as evidence, builds a five-dimension score, highlights regulatory/valuation risks, and includes data gaps for missing market data."
+    },
+    {
+      "id": 3,
+      "prompt": "用本地 trader-obsidian 帮我跑 03986.HK 的分析，并写进 Obsidian。",
+      "expected_output": "Uses local companion mode, recognizes that the user explicitly requested write-back, preserves HK ticker conventions, and mentions expected write side effects."
+    }
+  ]
+}

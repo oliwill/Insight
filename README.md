@@ -26,6 +26,7 @@ Core distinction:
 | Research Score | Five-dimension company/thesis quality score | `## 五维打分` |
 | Timing State | Entry quality state machine independent from research quality | `Ready / Wait / Watch / Avoid` |
 | Backtest | Verify historical timeline signals after a holding window | `## 预测验证` + `output/review_*` |
+| Public skill | Reusable AI workflow for users without the full local setup | `skills/stock-research-cockpit` |
 
 ## Quick Start
 
@@ -172,6 +173,7 @@ The pipeline is fault-tolerant: failed modules return `*_error` fields, data-sou
 | `input.evidence` | rule-based evidence extraction from wiki/materials/Inbox |
 | `analyzer.report_generator` | final Markdown report generation |
 | `analyzer.report_quality` | report structure, data-gap, and Research/Timing separation checks |
+| `skills/stock-research-cockpit` | reusable AI skill for stock research cockpit reports |
 | `memory.manager` | Obsidian wiki, Materials, timeline, dashboard persistence |
 | `backtest.runner` / `backtest.review` | timeline signal verification, extended metrics, and review reports |
 | `trader_mcp.py` | MCP server for Claude Desktop / MCP clients |
