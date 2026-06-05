@@ -6,7 +6,7 @@ import os
 import sys
 import io
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from contextlib import contextmanager
@@ -83,6 +83,28 @@ class StockInfo:
     currency: str = "USD"
     sector: str = ""
     industry: str = ""
+
+
+@dataclass
+class DataSourceAttempt:
+    """Single data source attempt for an operation."""
+
+    operation: str
+    source: str
+    status: str
+    detail: str = ""
+    rows: int = 0
+    timestamp: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "operation": self.operation,
+            "source": self.source,
+            "status": self.status,
+            "detail": self.detail,
+            "rows": self.rows,
+            "timestamp": self.timestamp,
+        }
 
 
 class LongBridgeClient:
@@ -218,9 +240,39 @@ class LongBridgeClient:
 class DataManager:
     """数据管理器 - 长桥API优先，Yahoo Finance备用"""
 
-    def __init__(self):
-        self.longbridge = LongBridgeClient()
+    def __init__(self, longbridge_client: Optional[LongBridgeClient] = None, yahoo_factory=None):
+        self.longbridge = longbridge_client if longbridge_client is not None else LongBridgeClient()
+        self.yahoo_factory = yahoo_factory or yf.Ticker
+        self._source_attempts: Dict[str, List[DataSourceAttempt]] = {}
         logger.info("DataManager initialized")
+
+    def _record_source_attempt(
+        self,
+        operation: str,
+        source: str,
+        status: str,
+        detail: str = "",
+        rows: int = 0,
+    ) -> None:
+        attempt = DataSourceAttempt(
+            operation=operation,
+            source=source,
+            status=status,
+            detail=detail,
+            rows=rows,
+            timestamp=datetime.now().isoformat(timespec="seconds"),
+        )
+        self._source_attempts.setdefault(operation, []).append(attempt)
+
+    def get_source_status(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Return structured data-source attempts for diagnostics and report gaps."""
+        return {
+            operation: [attempt.to_dict() for attempt in attempts]
+            for operation, attempts in self._source_attempts.items()
+        }
+
+    def _get_yf_ticker(self, symbol: str):
+        return self.yahoo_factory(self._yf_symbol(symbol))
 
     # ---------- 符号处理 ----------
 
@@ -293,9 +345,7 @@ class DataManager:
         # Yahoo Finance 备用（美股用不带 .US 的代码）
         if not results:
             try:
-                import yfinance as yf
-                yf_symbol = self._yf_symbol(symbol)
-                ticker = yf.Ticker(yf_symbol)
+                ticker = self._get_yf_ticker(symbol)
                 info = ticker.info
                 name = info.get("shortName") or info.get("longName") or symbol
                 if name and name != symbol:
@@ -320,6 +370,7 @@ class DataManager:
             quote = self.longbridge.get_quote(symbol)
             static = self.longbridge.get_static_info(symbol)
             if quote:
+                self._record_source_attempt("stock_info", "longbridge", "ok", rows=1)
                 return StockInfo(
                     code=symbol,
                     name=static.get("name_cn", "") if static else symbol,
@@ -328,9 +379,16 @@ class DataManager:
                     change_pct=quote["change_pct"],
                     currency={"HK": "HKD", "CN": "CNY"}.get(market, "USD"),
                 )
+            self._record_source_attempt("stock_info", "longbridge", "failed", "empty_or_failed")
+        else:
+            self._record_source_attempt("stock_info", "longbridge", "unavailable")
 
         # 备用 Yahoo Finance
-        return self._get_yf_stock_info(symbol)
+        info = self._get_yf_stock_info(symbol)
+        status = "ok" if info and info.name != "Unknown" else "failed"
+        detail = "" if status == "ok" else "empty_or_failed"
+        self._record_source_attempt("stock_info", "yahoo", status, detail, rows=1 if status == "ok" else 0)
+        return info
 
     def get_historical_data(self, code: str, period: str = "1y") -> Optional[pd.DataFrame]:
         """获取历史行情"""
@@ -342,10 +400,19 @@ class DataManager:
         if self.longbridge.is_available():
             df = self.longbridge.get_history(symbol, days)
             if df is not None and not df.empty:
+                self._record_source_attempt("historical_data", "longbridge", "ok", rows=len(df))
                 return df
+            self._record_source_attempt("historical_data", "longbridge", "failed", "empty_or_failed")
+        else:
+            self._record_source_attempt("historical_data", "longbridge", "unavailable")
 
         # 备用 Yahoo Finance
-        return self._get_yf_history(symbol, period)
+        df = self._get_yf_history(symbol, period)
+        if df is not None and not df.empty:
+            self._record_source_attempt("historical_data", "yahoo", "ok", rows=len(df))
+            return df
+        self._record_source_attempt("historical_data", "yahoo", "failed", "empty_or_failed")
+        return df
 
     def get_fundamentals(self, code: str) -> Dict:
         """获取基本面数据：长桥 static_info 优先算 PE/PB，YF 补充其余字段"""
@@ -358,6 +425,7 @@ class DataManager:
             static = self.longbridge.get_static_info(symbol)
             quote = self.longbridge.get_quote(symbol)
             if static:
+                self._record_source_attempt("fundamentals", "longbridge", "ok", rows=1)
                 lb_data["eps"] = static.get("eps")
                 lb_data["bps"] = static.get("bps")
                 lb_data["total_shares"] = static.get("total_shares")
@@ -385,11 +453,14 @@ class DataManager:
                     result["total_shares"] = lb_data["total_shares"]
                 if lb_data.get("circulating_shares"):
                     result["circulating_shares"] = lb_data["circulating_shares"]
+            else:
+                self._record_source_attempt("fundamentals", "longbridge", "failed", "empty_or_failed")
+        else:
+            self._record_source_attempt("fundamentals", "longbridge", "unavailable")
 
         # ===== 2. Yahoo Finance：补充毛利率/营收增长/行业/业务描述等 =====
         try:
-            yf_symbol = self._yf_symbol(symbol)
-            ticker = yf.Ticker(yf_symbol)
+            ticker = self._get_yf_ticker(symbol)
             info = ticker.info
 
             # YF 有值且长桥没算出来的字段，用 YF 补
@@ -431,8 +502,13 @@ class DataManager:
                     continue
                 if val is not None:
                     result[key] = val
+            if info:
+                self._record_source_attempt("fundamentals", "yahoo", "ok", rows=1)
+            else:
+                self._record_source_attempt("fundamentals", "yahoo", "failed", "empty_or_failed")
         except Exception as e:
             logger.warning(f"YF fundamentals fallback failed for {symbol}: {e}")
+            self._record_source_attempt("fundamentals", "yahoo", "failed", str(e))
 
         return result
 
@@ -456,7 +532,7 @@ class DataManager:
 
     def _get_yf_stock_info(self, symbol: str) -> StockInfo:
         try:
-            ticker = yf.Ticker(self._yf_symbol(symbol))
+            ticker = self._get_yf_ticker(symbol)
             info = ticker.info
             market = self.detect_market(symbol)
             return StockInfo(
@@ -475,7 +551,7 @@ class DataManager:
 
     def _get_yf_history(self, symbol: str, period: str) -> Optional[pd.DataFrame]:
         try:
-            ticker = yf.Ticker(self._yf_symbol(symbol))
+            ticker = self._get_yf_ticker(symbol)
             df = ticker.history(period=period)
             df = df.reset_index()
             df.columns = [c.lower().replace(" ", "_").replace(".", "_") for c in df.columns]

@@ -17,6 +17,7 @@ sys.path.insert(0, str(project_root))
 from run_analysis import write_analysis_to_obsidian
 from data.analysis_pipeline import generate_analysis
 from analyzer.report_generator import ReportGenerator
+from analyzer.report_quality import ReportQualityEvaluator
 from analyzer.research_score import ResearchScoreEngine
 from analyzer.timing_engine import TimingEngine
 from data.manager import DataManager
@@ -198,6 +199,11 @@ def main():
 
     # 使用统一报告生成器
     analysis_text = ReportGenerator.generate(analysis_code, market_data, research_score_obj, timing, evidence)
+    quality = ReportQualityEvaluator().evaluate(analysis_text, market_data)
+    if not quality.passed:
+        print(f"报告质量需复核: {quality.score}/100")
+        for issue in quality.issues[:5]:
+            print(f"- [{issue.severity}] {issue.code}: {issue.message}")
 
     # 评分和核心观点
     score = research_score_obj.total_adjusted_score

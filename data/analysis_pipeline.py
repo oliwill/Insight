@@ -355,4 +355,5 @@ def generate_analysis(code: str) -> Dict[str, Any]:
     except Exception as e:
         output['etf_error'] = f"Unexpected: {str(e)}"
 
+    output['_data_sources'] = dm.get_source_status()
     return output

@@ -160,7 +160,7 @@ vault/
 | Obsidian vault | 历史 thesis、素材、Inbox 证据 | `.env` 路径 |
 | 外部 finance-skills | 专业数据、估值、分析师预期、情绪、TradingView 和只读社交/source readers | 可选 Claude Code skills：`himself65/finance-skills` |
 
-流水线容错：单个模块失败会返回 `*_error` 字段，不阻断其他模块生成报告。
+流水线容错：单个模块失败会返回 `*_error` 字段，数据源尝试状态会写入 `_data_sources`，不阻断其他模块生成报告。
 
 ## 模块地图
 
@@ -171,8 +171,9 @@ vault/
 | `analyzer.timing_engine` | Ready/Wait/Watch/Avoid 交易时机状态机 |
 | `input.evidence` | 从 wiki/materials/Inbox 抽取结构化证据 |
 | `analyzer.report_generator` | 生成最终 Markdown 报告 |
+| `analyzer.report_quality` | 检查报告结构、数据缺口披露和 Research/Timing 分离 |
 | `memory.manager` | Obsidian wiki、Materials、时间线、Dashboard 持久化 |
-| `backtest.runner` / `backtest.review` | 时间线信号验证与复盘报告 |
+| `backtest.runner` / `backtest.review` | 时间线信号验证、扩展指标和复盘报告 |
 | `trader_mcp.py` | 面向 Claude Desktop / MCP 客户端的 MCP server |
 | `telegram_bot.py` | 可选移动端命令入口 |
 | `inbox_watcher.py` | 可选目录监听，触发 Inbox 扫描 |

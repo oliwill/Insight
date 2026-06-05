@@ -18,6 +18,7 @@ flowchart TD
     Score --> Report
     Timing --> Report
     Evidence --> Report
+    Report --> Quality[analyzer.report_quality]
     Report --> Memory[memory.manager]
     Memory --> Wiki
     Memory --> Dashboard[Dashboard.md]
@@ -37,8 +38,9 @@ flowchart TD
 | `analyzer/research_score.py` | five-dimension research score |
 | `analyzer/timing_engine.py` | trade-timing state machine |
 | `analyzer/report_generator.py` | final Markdown report |
+| `analyzer/report_quality.py` | report structure, data-gap, and Research/Timing separation checks |
 | `memory/manager.py` | wiki/Materials/index/log persistence |
-| `backtest/runner.py` | timeline signal parsing and verification |
+| `backtest/runner.py` | timeline signal parsing, verification, and extended metrics |
 | `backtest/review.py` | scheduled review workflow |
 | `trader_mcp.py` | MCP server entry point |
 | `telegram_bot.py` | optional Telegram command interface |
@@ -61,8 +63,9 @@ flowchart TD
 | `web_search` | `data.search.StockSearchEngine` |
 | `peers` | `data.correlation.CorrelationAnalyzer` |
 | `etf` | `data.etf.ETFAnalyzer`, only when symbol is detected as ETF |
+| `_data_sources` | `DataManager.get_source_status()` source-attempt diagnostics |
 
-Each stage catches local failures and emits a `*_error` key instead of aborting the entire pipeline.
+Each stage catches local failures and emits a `*_error` key instead of aborting the entire pipeline. Data-source fallbacks are recorded under `_data_sources`.
 
 ## Cockpit Analysis Flow
 
@@ -77,7 +80,8 @@ Each stage catches local failures and emits a `*_error` key instead of aborting 
 7. Build a `TimingState` with `TimingEngine`.
 8. Compare current score/timing with prior wiki timeline if available.
 9. Generate Markdown with `ReportGenerator`.
-10. Persist via `write_analysis_to_obsidian()`.
+10. Evaluate report structure with `ReportQualityEvaluator`.
+11. Persist via `write_analysis_to_obsidian()`.
 
 ## Research Score
 
@@ -144,7 +148,7 @@ The timeline supports both legacy entries and new Cockpit entries:
 
 `BacktestRunner.backtest_wiki_timeline()` parses timeline entries older than the selected holding window. If `Timing: Ready`, it turns the core view into a synthetic BUY signal; legacy BUY/SELL/HOLD words are also parsed. Results are appended to `预测验证`.
 
-`ReviewScheduler` wraps this into a full review run and generates Markdown/CSV/chart artifacts under `output/`.
+`ReviewScheduler` wraps this into a full review run and generates Markdown/CSV/chart artifacts under `output/`. Backtest results include verified count, expectancy, median/best/worst return, profit factor, and aggregate max drawdown.
 
 ## Interfaces
 

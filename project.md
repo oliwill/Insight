@@ -24,6 +24,9 @@
 | 五维 Research Score | 已实现 | `analyzer.research_score.ResearchScoreEngine` |
 | Timing State | 已实现 | `analyzer.timing_engine.TimingEngine` |
 | 时间线回测 | 已实现 | `backtest.runner.BacktestRunner` |
+| 回测扩展指标 | 已实现 | `backtest.core.BacktestResult` |
+| 数据源降级诊断 | 已实现 | `data.manager.DataManager.get_source_status()` |
+| 报告质量评估器 | 已实现 | `analyzer.report_quality.ReportQualityEvaluator` |
 | 定期复盘 | 已实现 | `scripts/run_review.py` |
 | MCP 服务 | 已实现 | `python trader_mcp.py` |
 | Telegram Bot | 已实现 | `python telegram_bot.py --polling` |
@@ -32,6 +35,7 @@
 | Yahoo 港股代码映射测试 | 已实现 | `tests/test_yahoo_symbol.py` |
 | Obsidian section 安全写入测试 | 已实现 | `tests/test_section_write.py` |
 | 报告生成渲染回归测试 | 已实现 | `tests/test_report_generator.py` |
+| 报告质量回归测试 | 已实现 | `tests/test_report_quality.py` |
 
 ## 3. 关键项目约束
 
@@ -96,9 +100,15 @@
 
 ### M4：投资级分析增强
 
-状态：待推进
+状态：进行中维护
 
-待补强方向：
+已完成工程化增强：
+
+- 回测结果新增 verified count、expectancy、median/best/worst return、profit factor、aggregate max drawdown 等指标。
+- `DataManager` 记录 Longbridge / Yahoo 数据源尝试状态，`generate_analysis()` 输出 `_data_sources` 便于排障和报告质量检查。
+- 新增 `ReportQualityEvaluator`，检查关键 section、Research Score / Timing State 分离和数据缺口披露。
+
+仍待补强方向：
 
 - 实时 GEX / options flow。
 - Insider / congressional trading。
@@ -129,14 +139,13 @@
 
 | 方向 | 价值 | 备注 |
 |---|---|---|
-| 更完整的回测指标 | 提高策略反馈质量 | 可扩展 `backtest.runner` 和 review 输出。 |
-| 多数据源容错策略 | 提高分析稳定性 | 针对 Yahoo / DuckDuckGo / NewsAPI / Longbridge 分层降级。 |
-| 报告质量评估器 | 降低生成报告的漂移风险 | 检查是否遗漏关键 section、是否混淆 Research Score 和 Timing State。 |
+| 外部实时/专业数据补齐 | 提高投资级分析完整性 | 继续通过 finance-skills 补 GEX、内部人、供应链、SEPA、TradingView IV/Greeks 等。 |
 
 ### Done
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-05 | 补强 M4 投资级分析基线 | 回测新增 expectancy、profit factor、median/best/worst return、aggregate max drawdown；`DataManager` 新增来源尝试诊断并输出 `_data_sources`；新增 `ReportQualityEvaluator` 和 `tests/test_report_quality.py` / `tests/test_data_source_resilience.py`；smoke wrapper 纳入 M4 回归。 |
 | 2026-06-05 | 收紧 M3 自动化入口回归边界 | 新增 `tests/test_m3_boundaries.py`，覆盖 Telegram bot helper/command、Inbox watcher debounce / scan、Windows scheduler 脚本契约；`run_smoke_tests.ps1` 纳入 bot / watcher / scheduler 编译和自动化入口测试；补齐 `notify_telegram()` fallback。 |
 | 2026-06-04 | 融合 finance-skills v8.0.1 更新 | 通过 `npx skills add himself65/finance-skills` 安装 24 个本地 skills 到 `.agents/skills/`，生成 `skills-lock.json`，并将最新 market-analysis / data-providers / social-readers 清单同步到项目文档和本地 `/think` 检查清单。 |
 | 2026-06-04 | 补齐外部 finance skills 缺口清单化 | 在 `CLAUDE.md` 和 `INTEGRATION_PLAN.md` 中补充 full-analysis checklist，明确 GEX / insider / supply chain / SEPA / sentiment / earnings / liquidity 的调用时机。 |

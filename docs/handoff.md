@@ -12,7 +12,9 @@ Status date: 2026-06-05
 | Evidence extraction | implemented | `input.evidence.EvidenceExtractor` |
 | Five-dimension Research Score | implemented | `analyzer.research_score.ResearchScoreEngine` |
 | Timing State | implemented | `analyzer.timing_engine.TimingEngine` |
-| Timeline backtesting | implemented | `backtest.runner.BacktestRunner` |
+| Timeline backtesting with extended metrics | implemented | `backtest.runner.BacktestRunner` |
+| Data-source fallback diagnostics | implemented | `data.manager.DataManager.get_source_status()` |
+| Report quality evaluator | implemented | `analyzer.report_quality.ReportQualityEvaluator` |
 | Scheduled review | implemented | `scripts/run_review.py` |
 | MCP server | implemented | `python trader_mcp.py` |
 | Telegram bot | implemented | `python telegram_bot.py --polling` |
@@ -30,6 +32,8 @@ Status date: 2026-06-05
 - Cockpit sections are replaced on each analysis: `证据表`, `五维打分`, `交易时机状态`, `与上次分析相比`.
 - Longitudinal sections are append-only: `分析时间线`, `预测验证`, `研究笔记`, `资料索引`.
 - Pipeline modules should emit `*_error` fields instead of stopping the full report.
+- Data-source fallback attempts should be inspectable via `_data_sources` in `generate_analysis()` output.
+- Generated reports should pass the quality evaluator for required sections, Research Score / Timing State separation, and data-gap disclosure.
 - Yahoo-backed modules normalize internal 5-digit HK symbols to Yahoo 4-digit `.HK` symbols while preserving canonical wiki identity.
 - Appended generated Markdown must not create new top-level wiki sections; module headings are stripped and research-note headings are demoted.
 
@@ -37,8 +41,8 @@ Status date: 2026-06-05
 
 ```bash
 git status --short
-python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py notification.py
-PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_backtest_review.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
+python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py notification.py analyzer/report_quality.py
+PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_report_quality.py tests/test_backtest_review.py tests/test_data_source_resilience.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
 python -c "from config import Config; print(Config.get_wiki_dir())"
 python scripts/scan_inbox.py --dry-run --json
 ```
@@ -82,6 +86,13 @@ M3 automation regression guards:
 
 - `tests/test_m3_boundaries.py` covers Telegram bot helper/command contracts, Inbox watcher debounce and scan contracts, and Windows script invariants.
 - `scripts/windows/run_smoke_tests.ps1` compiles `telegram_bot.py`, `inbox_watcher.py`, and `scheduler.py`, and includes automation/scheduler/M3 tests in the pytest set.
+
+M4 investment-grade regression guards:
+
+- `tests/test_backtest_review.py` covers extended backtest metrics: expectancy, median/best/worst returns, profit factor, and aggregate max drawdown.
+- `tests/test_data_source_resilience.py` covers Longbridge-to-Yahoo fallback and source-attempt diagnostics.
+- `tests/test_report_quality.py` covers report required sections, Research Score / Timing State separation, and data-gap disclosure.
+- `scripts/windows/run_smoke_tests.ps1` compiles `analyzer/report_quality.py` and includes the M4 tests above.
 
 Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a report written to Obsidian.
 

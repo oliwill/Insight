@@ -27,6 +27,20 @@ class DecimalPriceDataManager:
         )
 
 
+class TwoSignalDataManager:
+    def get_historical_data(self, ticker: str, period: str):
+        return pd.DataFrame(
+            {
+                "date": ["2026-01-02", "2026-01-03"],
+                "open": [100.0, 110.0],
+                "high": [100.0, 110.0],
+                "low": [100.0, 110.0],
+                "close": [100.0, 110.0],
+                "volume": [1000, 1000],
+            }
+        )
+
+
 def test_ticker_from_wiki_stem_restores_common_codes():
     assert BacktestRunner._ticker_from_wiki_stem("AAPL_US") == "AAPL.US"
     assert BacktestRunner._ticker_from_wiki_stem("03986_HK") == "03986.HK"
@@ -71,3 +85,28 @@ def test_backtest_handles_decimal_price_series():
 
     assert result.signals[0].verified is True
     assert result.signals[0].return_pct == pytest.approx(10.0)
+
+
+def test_backtest_summary_includes_investment_grade_metrics():
+    engine = BacktestEngine(data_manager=TwoSignalDataManager())
+    result = engine.backtest_analysis(
+        "AAPL.US",
+        AnalysisResult(
+            score=70,
+            summary="Mixed setup",
+            signals=["BUY breakout", "SELL breakdown"],
+            risks=[],
+        ),
+        "2026-01-02",
+        days_after=1,
+    )
+
+    assert result.verified_count == 2
+    assert result.win_rate == pytest.approx(50.0)
+    assert result.expectancy_pct == pytest.approx(0.0)
+    assert result.median_return_pct == pytest.approx(0.0)
+    assert result.best_return_pct == pytest.approx(10.0)
+    assert result.worst_return_pct == pytest.approx(-10.0)
+    assert result.profit_factor == pytest.approx(1.0)
+    assert result.max_drawdown_pct == pytest.approx(-10.0)
+    assert "Profit factor: 1.00" in result.to_markdown()

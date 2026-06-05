@@ -67,10 +67,10 @@ Manual equivalent:
 ```bash
 # Verify imports and syntax
 python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py notification.py telegram_bot.py inbox_watcher.py scheduler.py
-python -m py_compile data/manager.py data/earnings.py data/liquidity.py data/options.py data/correlation.py data/etf.py data/search.py
+python -m py_compile data/manager.py data/earnings.py data/liquidity.py data/options.py data/correlation.py data/etf.py data/search.py analyzer/report_quality.py
 
 # Verify regression guards
-PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_backtest_review.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
+PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_report_quality.py tests/test_backtest_review.py tests/test_data_source_resilience.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
 
 # Verify config is visible
 python -c "from config import Config; print(Config.get_wiki_dir())"
@@ -187,6 +187,13 @@ M3 regression boundary:
 - `tests/test_m3_boundaries.py` checks Inbox watcher debounce, Markdown-only filtering, scan command, and notification fallback contracts.
 - `tests/test_m3_boundaries.py` checks Windows scheduler scripts keep hidden PowerShell windows, scheduled Dashboard reason, stdout/stderr logging, Task Scheduler verification polling, and smoke wrapper coverage.
 - `scripts\windows\run_smoke_tests.ps1` includes `telegram_bot.py`, `inbox_watcher.py`, `scheduler.py`, `tests\test_automation_entrypoints.py`, `tests\test_scheduler.py`, and `tests\test_m3_boundaries.py`.
+
+M4 investment-grade regression boundary:
+
+- `tests/test_backtest_review.py` covers extended backtest metrics: verified count, expectancy, median/best/worst return, profit factor, and aggregate max drawdown.
+- `tests/test_data_source_resilience.py` covers Longbridge-to-Yahoo fallback and `DataManager.get_source_status()` attempt records.
+- `tests/test_report_quality.py` covers report quality checks for required sections, Research Score / Timing State separation, and data-gap disclosure.
+- `generate_analysis()` includes `_data_sources` so degraded data-source paths can be inspected in JSON output.
 
 If a scheduled Dashboard update looks wrong:
 

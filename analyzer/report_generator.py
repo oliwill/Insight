@@ -73,6 +73,12 @@ class ReportGenerator:
         return "\n\n".join(section for section in sections if section and section.strip())
 
     @classmethod
+    def evaluate_quality(cls, markdown: str, market_data: Dict[str, Any] = None):
+        from analyzer.report_quality import ReportQualityEvaluator
+
+        return ReportQualityEvaluator().evaluate(markdown, market_data or {})
+
+    @classmethod
     def _section_1_overview(cls, stock_code: str, stock_info: Dict, technicals: Dict, fundamentals: Dict, liquidity: Dict, options: Dict, wyckoff: Dict, earnings: Dict, web_search: Dict, research_score=None, timing_state=None, evidence: Sequence = (), market_data: Dict = None) -> str:
         """第一部分：核心观点"""
         market_data = market_data or {}

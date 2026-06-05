@@ -142,7 +142,8 @@ It performs:
 5. Five-dimension scoring via `analyzer.research_score.ResearchScoreEngine`.
 6. Trade timing via `analyzer.timing_engine.TimingEngine`.
 7. Report generation via `analyzer.report_generator.ReportGenerator`.
-8. Wiki write via `run_analysis.write_analysis_to_obsidian()`.
+8. Report quality check via `analyzer.report_quality.ReportQualityEvaluator`.
+9. Wiki write via `run_analysis.write_analysis_to_obsidian()`.
 
 ### Research Score vs Timing State
 

@@ -160,7 +160,7 @@ Thresholds: ≥75 high-conviction / 60–75 standard candidate / 45–60 watch /
 | Obsidian vault | prior theses, materials, Inbox evidence | `.env` paths |
 | External finance-skills | analyst-grade data, valuation, estimates, sentiment, TradingView, and read-only social/source readers | optional Claude Code skills from `himself65/finance-skills` |
 
-The pipeline is fault-tolerant: failed modules return `*_error` fields and the rest of the report can still be generated.
+The pipeline is fault-tolerant: failed modules return `*_error` fields, data-source attempts are exposed under `_data_sources`, and the rest of the report can still be generated.
 
 ## Module Map
 
@@ -171,8 +171,9 @@ The pipeline is fault-tolerant: failed modules return `*_error` fields and the r
 | `analyzer.timing_engine` | Ready/Wait/Watch/Avoid timing state machine |
 | `input.evidence` | rule-based evidence extraction from wiki/materials/Inbox |
 | `analyzer.report_generator` | final Markdown report generation |
+| `analyzer.report_quality` | report structure, data-gap, and Research/Timing separation checks |
 | `memory.manager` | Obsidian wiki, Materials, timeline, dashboard persistence |
-| `backtest.runner` / `backtest.review` | timeline signal verification and review reports |
+| `backtest.runner` / `backtest.review` | timeline signal verification, extended metrics, and review reports |
 | `trader_mcp.py` | MCP server for Claude Desktop / MCP clients |
 | `telegram_bot.py` | optional mobile command interface |
 | `inbox_watcher.py` | optional folder watcher that triggers Inbox scans |
