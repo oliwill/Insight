@@ -51,9 +51,17 @@ ANALYSIS_TIMEOUT=30
 
 Optional integrations are documented in `.env.example`: Longbridge, NewsAPI, Telegram bot, Inbox watcher folders, Podwise, and scheduler cron strings.
 
-## Public AI Skill
+## Skills Update
 
-Users who want the research workflow without installing the full local pipeline can start with the reusable skill:
+This version updates the skills layer so the research workflow can be reused outside the full local pipeline. It includes:
+
+| Skill set | Path | Purpose |
+|---|---|---|
+| Public cockpit skill | `skills/stock-research-cockpit/` | Portable AI workflow for evidence-backed stock research |
+| Finance companion skills | `.agents/skills/` | Optional valuation, estimates, sentiment, source-reader, and market-analysis helpers |
+| Skill lockfile | `skills-lock.json` | Records the imported finance-skill sources and hashes |
+
+The public skill is the recommended starting point for users who only want the research workflow:
 
 ```text
 skills/stock-research-cockpit/
@@ -66,6 +74,60 @@ The skill packages the core workflow as AI instructions:
 - External finance-skills mode for richer valuation, sentiment, source-reader, and market-structure coverage.
 
 It preserves the core product boundary: evidence-backed research, five-dimension Research Score, independent Timing State, data-gap disclosure, and no trade execution.
+
+### Install skills
+
+If you are using this repository with an AI agent that can load repo-local skills, no extra install step is needed. Keep the public skill folder in place:
+
+```text
+skills/stock-research-cockpit/
+```
+
+For a Codex-style local skills directory on macOS/Linux:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R skills/stock-research-cockpit ~/.codex/skills/
+```
+
+For Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
+Copy-Item -Recurse -Force ".\skills\stock-research-cockpit" "$env:USERPROFILE\.codex\skills\stock-research-cockpit"
+```
+
+If your agent reads skills from `~/.agents/skills`, copy the public skill there instead. Use whichever local skills directory your AI client indexes.
+
+macOS/Linux:
+
+```bash
+mkdir -p ~/.agents/skills
+cp -R skills/stock-research-cockpit ~/.agents/skills/
+```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.agents\skills" | Out-Null
+Copy-Item -Recurse -Force ".\skills\stock-research-cockpit" "$env:USERPROFILE\.agents\skills\stock-research-cockpit"
+```
+
+To enable the optional finance companion skills, copy the vendored skill bundle as well:
+
+```bash
+mkdir -p ~/.agents/skills
+cp -R .agents/skills/* ~/.agents/skills/
+```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.agents\skills" | Out-Null
+Copy-Item -Recurse -Force ".\.agents\skills\*" "$env:USERPROFILE\.agents\skills\"
+```
+
+After copying skills into a local skills directory, restart or reload the AI agent so it can index the new folders.
 
 ## Commands
 
