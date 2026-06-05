@@ -57,13 +57,13 @@ class ReportQualityEvaluator:
     """Validate generated report structure and disclosure quality."""
 
     REQUIRED_MARKERS = (
-        ("title", r"^# .+\(.+\)", "报告标题必须包含公司名和代码"),
-        ("core_view", r"## 一、核心观点", "缺少核心观点 section"),
+        ("title", r"^# (?:[A-Z0-9.]+\s+.+|.+\(.+\))", "报告标题必须包含代码和股票名称"),
+        ("data_time", r"^\*\*数据时间\*\*：.+", "报告标题下必须包含数据时间"),
+        ("core_view", r"## 一、本次分析总结", "缺少本次分析总结 section"),
         ("research_score", r"\*\*Research Score\*\*", "缺少独立 Research Score 展示"),
         ("timing_state", r"\*\*Timing State\*\*", "缺少独立 Timing State 展示"),
         ("evidence", r"### 证据摘要", "缺少证据摘要"),
-        ("timing_summary", r"### 交易时机", "缺少交易时机摘要"),
-        ("action_plan", r"## 七、操作建议", "缺少操作建议 section"),
+        ("action_plan", r"## 六、交易计划", "缺少交易计划 section"),
         ("disclaimer", r"免责声明", "缺少免责声明"),
     )
     TIMING_STATES = ("Ready", "Wait", "Watch", "Avoid")
@@ -103,7 +103,7 @@ class ReportQualityEvaluator:
         ]
         timing_lines = [
             line for line in lines
-            if line.startswith("**Timing State**")
+            if "**Timing State**" in line
         ]
 
         for line in research_lines:

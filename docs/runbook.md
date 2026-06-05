@@ -107,6 +107,7 @@ Expected side effects:
 
 - `Analysis/AAPL_US.md`, `Analysis/HIMS_US.md`, or `Analysis/03986_HK.md` exists under `Config.get_wiki_dir()` depending on the symbol tested.
 - `Charts/{CODE}_wyckoff.png` may exist under `WIKI_BASE_DIR/Charts` if enough historical rows are available.
+- Generated reports should start with `# CODE Name`, `**数据时间**`, then `## 一、本次分析总结`; the top section should front-load current action, main tension, primary risk, dynamic `关键判断`, and short data-quality reminders before detailed evidence.
 - Top-level sections such as `研究笔记`, `财报预期`, `流动性分析`, `期权市场`, and `交叉引用` should appear once as line-anchored `##` headings.
 - Report headings inside `研究笔记` should be nested as `###` or lower, not `#` or `##`.
 - Dashboard updates when `python run_analysis.py --dashboard` is run.
@@ -192,7 +193,7 @@ M4 investment-grade regression boundary:
 
 - `tests/test_backtest_review.py` covers extended backtest metrics: verified count, expectancy, median/best/worst return, profit factor, and aggregate max drawdown.
 - `tests/test_data_source_resilience.py` covers Longbridge-to-Yahoo fallback and `DataManager.get_source_status()` attempt records.
-- `tests/test_report_quality.py` covers report quality checks for required sections, Research Score / Timing State separation, and data-gap disclosure.
+- `tests/test_report_quality.py` covers report quality checks for the title/data-time header, required sections, Research Score / Timing State separation, and data-gap disclosure.
 - `generate_analysis()` includes `_data_sources` so degraded data-source paths can be inspected in JSON output.
 
 If a scheduled Dashboard update looks wrong:

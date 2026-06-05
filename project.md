@@ -145,6 +145,7 @@
 
 | 日期 | 事项 | 说明 |
 |---|---|---|
+| 2026-06-05 | 优化报告首屏阅读路径 | 报告标题改为 `代码 + 股票名称`，标题下展示数据时间；正文以 `本次分析总结` 开始，前置当前动作、主要矛盾、最大风险、动态 `关键判断` 和短数据质量提醒，再展开 Research Score、基本面、技术结构、市场结构、交易计划、催化风险和情绪。 |
 | 2026-06-05 | 补强 M4 投资级分析基线 | 回测新增 expectancy、profit factor、median/best/worst return、aggregate max drawdown；`DataManager` 新增来源尝试诊断并输出 `_data_sources`；新增 `ReportQualityEvaluator` 和 `tests/test_report_quality.py` / `tests/test_data_source_resilience.py`；smoke wrapper 纳入 M4 回归。 |
 | 2026-06-05 | 收紧 M3 自动化入口回归边界 | 新增 `tests/test_m3_boundaries.py`，覆盖 Telegram bot helper/command、Inbox watcher debounce / scan、Windows scheduler 脚本契约；`run_smoke_tests.ps1` 纳入 bot / watcher / scheduler 编译和自动化入口测试；补齐 `notify_telegram()` fallback。 |
 | 2026-06-04 | 融合 finance-skills v8.0.1 更新 | 通过 `npx skills add himself65/finance-skills` 安装 24 个本地 skills 到 `.agents/skills/`，生成 `skills-lock.json`，并将最新 market-analysis / data-providers / social-readers 清单同步到项目文档和本地 `/think` 检查清单。 |

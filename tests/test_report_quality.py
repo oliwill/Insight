@@ -39,7 +39,7 @@ def test_quality_evaluator_flags_research_score_timing_confusion():
                 "price": 190.0,
             }
         },
-    ).replace("**Research Score**：50.0/100", "**Research Score**：Ready")
+    ).replace("| **Research Score** | 50.0/100 🟡 |", "| **Research Score** | Ready |")
 
     quality = ReportQualityEvaluator().evaluate(markdown, {})
 
@@ -49,20 +49,21 @@ def test_quality_evaluator_flags_research_score_timing_confusion():
 
 
 def test_quality_evaluator_requires_data_gap_disclosure_for_failed_modules():
-    markdown = """# Apple Inc. (AAPL.US)
+    markdown = """# AAPL.US Apple Inc.
 
-## 一、核心观点
+**数据时间**：2026-06-02 14:42
 
-**Research Score**：70/100
-**Timing State**：Ready
+## 一、本次分析总结
+
+| 项目 | 结论 |
+|---|---|
+| **Research Score** | 70/100 |
+| **Timing State** | Ready |
 
 ### 证据摘要
 - 有结构化证据
 
-### 交易时机
-- **状态**：Ready
-
-## 七、操作建议
+## 六、交易计划
 等待触发条件。
 
 **免责声明**：本分析仅供参考，不构成投资建议。

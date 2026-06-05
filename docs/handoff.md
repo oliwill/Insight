@@ -33,7 +33,8 @@ Status date: 2026-06-05
 - Longitudinal sections are append-only: `分析时间线`, `预测验证`, `研究笔记`, `资料索引`.
 - Pipeline modules should emit `*_error` fields instead of stopping the full report.
 - Data-source fallback attempts should be inspectable via `_data_sources` in `generate_analysis()` output.
-- Generated reports should pass the quality evaluator for required sections, Research Score / Timing State separation, and data-gap disclosure.
+- Generated reports should pass the quality evaluator for the title/data-time header, required sections, Research Score / Timing State separation, and data-gap disclosure.
+- The report reading path is top-down: `# CODE Name`, `**数据时间**`, `## 一、本次分析总结`, optional dynamic `关键判断`, short `数据质量提醒`, then evidence and detailed modules.
 - Yahoo-backed modules normalize internal 5-digit HK symbols to Yahoo 4-digit `.HK` symbols while preserving canonical wiki identity.
 - Appended generated Markdown must not create new top-level wiki sections; module headings are stripped and research-note headings are demoted.
 
@@ -91,7 +92,7 @@ M4 investment-grade regression guards:
 
 - `tests/test_backtest_review.py` covers extended backtest metrics: expectancy, median/best/worst returns, profit factor, and aggregate max drawdown.
 - `tests/test_data_source_resilience.py` covers Longbridge-to-Yahoo fallback and source-attempt diagnostics.
-- `tests/test_report_quality.py` covers report required sections, Research Score / Timing State separation, and data-gap disclosure.
+- `tests/test_report_quality.py` covers report title/data-time header, required sections, Research Score / Timing State separation, and data-gap disclosure.
 - `scripts/windows/run_smoke_tests.ps1` compiles `analyzer/report_quality.py` and includes the M4 tests above.
 
 Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a report written to Obsidian.
