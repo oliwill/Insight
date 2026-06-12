@@ -112,16 +112,17 @@ class FundamentalAnalyzer(BaseAnalyzer):
                 fundamentals[k] = ""
         # 解析财务指标
         metrics = self._parse_metrics(fundamentals)
-        
+        supply_chain_analysis = self._analyze_supply_chain_position(fundamentals)
+
         # 获取估值上下文（行业对比和历史区间）
         context = self._get_valuation_context(data, fundamentals)
-        
+
         # 执行各维度分析
         business_analysis = self._analyze_business_model(fundamentals)
         financial_analysis = self._analyze_financial_health(metrics)
         valuation_analysis = self._analyze_valuation(metrics, context)
         growth_analysis = self._analyze_growth(metrics)
-        
+
         # 综合评分
         score = self._calculate_overall_score(
             business_analysis,
@@ -129,27 +130,51 @@ class FundamentalAnalyzer(BaseAnalyzer):
             valuation_analysis,
             growth_analysis
         )
-        
+
         # 生成投资建议
         recommendation = self._generate_recommendation(
             score, metrics, valuation_analysis
         )
-        
+
+        details = {
+            "business": business_analysis,
+            "financial": financial_analysis,
+            "valuation": valuation_analysis,
+            "growth": growth_analysis,
+            "metrics": metrics,
+            "context": context,
+        }
+        if supply_chain_analysis:
+            details["supply_chain"] = supply_chain_analysis
+
         return AnalysisResult(
             score=score,
             summary=recommendation["summary"],
-            details={
-                "business": business_analysis,
-                "financial": financial_analysis,
-                "valuation": valuation_analysis,
-                "growth": growth_analysis,
-                "metrics": metrics,
-                "context": context
-            },
+            details=details,
             signals=recommendation["signals"],
             risks=recommendation["risks"]
         )
     
+    def _analyze_supply_chain_position(self, fundamentals: Dict) -> Dict:
+        """提取个股产业链卡位摘要，作为基本面分析的补充信息。"""
+        supply_chain = fundamentals.get("supply_chain") or {}
+        if not isinstance(supply_chain, dict):
+            return {}
+        if supply_chain.get("status") not in {"available", "fallback"}:
+            return {}
+
+        target_layer = supply_chain.get("target_layer") or {}
+        return {
+            "topic": supply_chain.get("topic", ""),
+            "position": supply_chain.get("position", ""),
+            "layer": target_layer.get("name", ""),
+            "bottleneck_score": target_layer.get("bottleneck_score", supply_chain.get("bottleneck_score", 0)),
+            "bottleneck_level": target_layer.get("bottleneck_level", supply_chain.get("bottleneck_level", "")),
+            "supply_demand": target_layer.get("supply_demand", ""),
+            "opportunities": list(supply_chain.get("opportunities", [])[:3]),
+            "risks": list(supply_chain.get("risks", [])[:3]),
+        }
+
     def _parse_metrics(self, fundamentals: Dict) -> FinancialMetrics:
         """解析财务指标"""
         return FinancialMetrics(

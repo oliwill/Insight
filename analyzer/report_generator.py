@@ -50,6 +50,7 @@ class ReportGenerator:
         options = market_data.get('options', {})
         earnings = market_data.get('earnings', {})
         web_search = market_data.get('web_search', {})
+        supply_chain = market_data.get('supply_chain', {}) or fundamentals.get('supply_chain', {})
 
         sections = [
             cls._format_report_header(stock_code, stock_info, market_data),
@@ -131,8 +132,11 @@ class ReportGenerator:
         max_pain = options.get('max_pain')
         max_pain_display = f"${max_pain:.2f}" if max_pain is not None else "N/A"
 
+        supply_chain = market_data.get('supply_chain', {}) or fundamentals.get('supply_chain', {})
         summary_lines = [
             "## 一、本次分析总结",
+            "",
+            cls._format_opening_conclusion(stock_code, stock_info, fundamentals, technicals, research_score, timing_state),
             "",
             f"**一句话判断**：{cls._get_one_line_summary(research_value, timing_label, potential, technicals, fundamentals)}",
             "",
@@ -173,7 +177,7 @@ class ReportGenerator:
 
         evidence_and_score = [f"""---
 
-## 二、研究质量与证据
+## 二、公司与证据概览
 
 **股票信息**：{name} ({stock_code}) | {sector} / {industry}
 **当前价格**：{fmt_money(price)} ({fmt_pct(change_pct, 2, signed=True)})
@@ -200,11 +204,12 @@ class ReportGenerator:
 """)
         sections.append("\n\n".join(item.strip() for item in evidence_and_score if item and item.strip()))
 
-        if cls._has_meaningful_data(fundamentals):
+        supply_chain_md = cls._format_supply_chain_analysis(supply_chain)
+        if cls._has_meaningful_data(fundamentals) or supply_chain_md:
             sections.append(f"""---
 
 ## 三、基本面与估值
-### 护城河分析
+{supply_chain_md + chr(10) + chr(10) if supply_chain_md else ''}### 护城河分析
 
 {cls._format_moat_analysis(fundamentals)}
 
@@ -237,7 +242,9 @@ class ReportGenerator:
             chart_gallery = cls._format_chart_gallery(stock_code, market_data)
             sections.append(f"""---
 
-## 四、买点与技术结构
+## 四、技术结构与五维分析
+{cls._format_research_score_summary(research_score)}
+
 ### 交易时机
 {cls._format_timing_summary(timing_state)}
 
@@ -292,7 +299,7 @@ class ReportGenerator:
 
         sections.append(f"""---
 
-## 六、交易计划
+## 六、操作建议
 ### 当前状态
 {cls._get_timing_action(timing_label)} | Research Score {research_value:.1f}/100 | Timing {timing_label}
 
@@ -421,7 +428,6 @@ class ReportGenerator:
         gaps = []
         checks = [
             ("行情/技术指标", technicals, "technicals_error"),
-            ("基本面", fundamentals, "fundamentals_error"),
             ("财报", earnings, "earnings_error"),
             ("流动性", liquidity, "liquidity_error"),
             ("期权", options, "options_error"),
@@ -433,7 +439,36 @@ class ReportGenerator:
                 gaps.append(f"- **{label}**：{error}")
             elif not cls._has_meaningful_data(data):
                 gaps.append(f"- **{label}**：本次未取得有效数据，已从正文模块中省略")
+        if market_data.get("fundamentals_error"):
+            gaps.append(f"- **基本面**：{market_data.get('fundamentals_error')}")
+        elif not cls._has_core_fundamental_data(fundamentals):
+            gaps.append("- **基本面**：本次未取得有效财务估值数据，产业链信息仅作为基本面补充")
         return "\n".join(gaps)
+
+    @classmethod
+    def _has_core_fundamental_data(cls, fundamentals: Dict) -> bool:
+        """只用财务/估值字段判断基本面是否有效，避免 supply_chain 掩盖数据缺口。"""
+        return cls._has_any_value(
+            fundamentals,
+            [
+                "pe_forward",
+                "pe_ttm",
+                "trailing_pe",
+                "pb",
+                "ps",
+                "price_to_sales",
+                "gross_margin",
+                "profit_margin",
+                "roe",
+                "roa",
+                "revenue_growth",
+                "earnings_growth",
+                "free_cashflow",
+                "target_mean_price",
+                "target_low_price",
+                "target_high_price",
+            ],
+        )
 
     @classmethod
     def _get_one_line_summary(
@@ -671,9 +706,87 @@ class ReportGenerator:
         return "\n\n".join(charts)
 
     @classmethod
+    def _format_opening_conclusion(cls, stock_code: str, stock_info: Dict, fundamentals: Dict, technicals: Dict, research_score=None, timing_state=None) -> str:
+        name = stock_info.get("name") or stock_code
+        industry = stock_info.get("industry") or stock_info.get("sector") or "业务"
+        price = stock_info.get("price") or 0
+        pe = fundamentals.get("pe_forward") or fundamentals.get("pe_ttm") or fundamentals.get("trailing_pe")
+        pb = fundamentals.get("pb")
+        target = fundamentals.get("target_mean_price") or 0
+        support = technicals.get("support_20d") or 0
+        potential = (target / price - 1) * 100 if price and target else 0
+
+        timing_label = getattr(timing_state, "state", "N/A")
+        research_value = getattr(research_score, "total_adjusted_score", None)
+        if timing_label == "Ready":
+            action_word = "建仓"
+        elif timing_label in {"Wait", "Watch", "N/A"}:
+            action_word = "观望"
+        elif timing_label == "Avoid":
+            action_word = "回避"
+        elif potential > 0 or (research_value is not None and research_value >= 45):
+            action_word = "观望"
+        else:
+            action_word = "回避"
+
+        price_text = f"${price:,.2f}" if price else "N/A"
+        pe_text = f"{float(pe):.2f} 倍" if pe else "N/A"
+        pb_text = f"{float(pb):.2f} 倍" if pb else "N/A"
+        entry_text = f"${support:,.2f}" if support else "等待技术触发"
+        target_text = f"${target:,.2f}" if target else "待分析师目标价/估值模型确认"
+
+        return (
+            f"{name} 是一家{industry}公司，当前股价 {price_text}，"
+            f"PE {pe_text}，PB {pb_text}，经过分析建议{action_word}，"
+            f"建议建仓价格 {entry_text}，目标价格 {target_text}。"
+        )
+
+    @classmethod
+    def _format_supply_chain_analysis(cls, supply_chain: Dict) -> str:
+        if not isinstance(supply_chain, dict):
+            return ""
+        if supply_chain.get("status") not in {"available", "fallback"}:
+            return ""
+
+        target_layer = supply_chain.get("target_layer") or {}
+        lines = [
+            "### 产业链位置",
+            "",
+            f"- **主题**：{supply_chain.get('topic', '-')}",
+            f"- **公司位置**：{supply_chain.get('position') or '-'}",
+            f"- **所在层级**：{target_layer.get('name', '-')}",
+            f"- **瓶颈强度**：{target_layer.get('bottleneck_score', supply_chain.get('bottleneck_score', 0))}/10（{target_layer.get('bottleneck_level', supply_chain.get('bottleneck_level', '-'))}）",
+            f"- **供需判断**：{target_layer.get('supply_demand', '-')}",
+        ]
+        opportunities = supply_chain.get("opportunities") or []
+        risks = supply_chain.get("risks") or []
+        if opportunities:
+            lines.append("- **上行逻辑**：" + "；".join(opportunities[:3]))
+        if risks:
+            lines.append("- **核心风险**：" + "；".join(risks[:3]))
+        return "\n".join(lines)
+
+    @classmethod
+    def _format_research_score_summary(cls, research_score) -> str:
+        if not research_score:
+            return "- 五维分析暂不可用"
+        lines = [
+            "### 五维分析",
+            "",
+            "| 维度 | 得分 | 证据 |",
+            "|---|---:|---|",
+        ]
+        for dim in research_score.dimensions.values():
+            evidence = "; ".join((dim.data_evidence + dim.obsidian_evidence)[:2]) or dim.adjustment_reason or "证据不足"
+            lines.append(f"| {dim.name} | {dim.adjusted_score:.1f}/10 | {evidence.replace('|', '/')[:80]} |")
+        lines.append(f"| **综合** | **{research_score.total_adjusted_score:.1f}/100** | **{research_score.verdict} / {research_score.confidence}** |")
+        return "\n".join(lines)
+
+    @classmethod
     def _section_2_technical(cls, technicals: Dict, wyckoff: Dict) -> str:
         """第二部分：技术分析（已合并到第一部分）"""
         return ""
+
 
     @classmethod
     def _section_3_fundamental(cls, fundamentals: Dict) -> str:

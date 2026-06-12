@@ -63,7 +63,7 @@ class ReportQualityEvaluator:
         ("research_score", r"\*\*Research Score\*\*", "缺少独立 Research Score 展示"),
         ("timing_state", r"\*\*Timing State\*\*", "缺少独立 Timing State 展示"),
         ("evidence", r"### 证据摘要", "缺少证据摘要"),
-        ("action_plan", r"## 六、交易计划", "缺少交易计划 section"),
+        ("action_plan", r"## 六、(?:交易计划|操作建议)", "缺少交易计划/操作建议 section"),
         ("disclaimer", r"免责声明", "缺少免责声明"),
     )
     TIMING_STATES = ("Ready", "Wait", "Watch", "Avoid")
@@ -153,7 +153,12 @@ class ReportQualityEvaluator:
             if market_data.get(error_key):
                 expected_gaps.append(label)
                 continue
-            if not self._has_meaningful_data(market_data.get(data_key)):
+            data = market_data.get(data_key)
+            if data_key == "fundamentals":
+                if not self._has_core_fundamental_data(data):
+                    expected_gaps.append(label)
+                continue
+            if not self._has_meaningful_data(data):
                 expected_gaps.append(label)
 
         if expected_gaps and "## 数据缺口" not in markdown:
@@ -166,6 +171,29 @@ class ReportQualityEvaluator:
                 )
             ]
         return []
+
+    def _has_core_fundamental_data(self, fundamentals: Any) -> bool:
+        if not isinstance(fundamentals, dict):
+            return False
+        core_keys = (
+            "pe_forward",
+            "pe_ttm",
+            "trailing_pe",
+            "pb",
+            "ps",
+            "price_to_sales",
+            "gross_margin",
+            "profit_margin",
+            "roe",
+            "roa",
+            "revenue_growth",
+            "earnings_growth",
+            "free_cashflow",
+            "target_mean_price",
+            "target_low_price",
+            "target_high_price",
+        )
+        return any(self._has_meaningful_data(fundamentals.get(key)) for key in core_keys)
 
     def _has_meaningful_data(self, value: Any) -> bool:
         if value is None:

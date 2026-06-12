@@ -69,11 +69,12 @@ class ResearchScoreEngine:
         stock_info = market_data.get("stock_info", {}) or {}
         peers = market_data.get("peers", []) or []
         web_search = market_data.get("web_search", {}) or {}
+        supply_chain = market_data.get("supply_chain", {}) or fundamentals.get("supply_chain", {}) or {}
 
         dimensions = {
-            "行业/TAM": self._industry_score(stock_info, peers, web_search),
-            "护城河": self._moat_score(fundamentals, peers),
-            "增长质量": self._growth_score(fundamentals),
+            "行业/TAM": self._industry_score(stock_info, peers, web_search, supply_chain),
+            "护城河": self._moat_score(fundamentals, peers, supply_chain),
+            "增长质量": self._growth_score(fundamentals, supply_chain),
             "估值": self._valuation_score(fundamentals, stock_info, peers),
             "团队/治理": self._team_score(fundamentals, market_data.get("liquidity", {}) or {}),
         }
@@ -99,7 +100,7 @@ class ResearchScoreEngine:
             missing_evidence=missing,
         )
 
-    def _industry_score(self, stock_info: Dict, peers: List[Dict], web_search: Dict) -> ResearchDimensionScore:
+    def _industry_score(self, stock_info: Dict, peers: List[Dict], web_search: Dict, supply_chain: Optional[Dict] = None) -> ResearchDimensionScore:
         score = 5.0
         evidence = []
         sector = (stock_info.get("sector") or "").lower()
@@ -115,9 +116,20 @@ class ResearchScoreEngine:
         if web_search.get("reddit") or web_search.get("polymarket"):
             evidence.append("存在社交/预测市场关注度")
 
+        if self._has_supply_chain(supply_chain):
+            topic = supply_chain.get("topic", "-")
+            position = supply_chain.get("position", "")
+            target_layer = supply_chain.get("target_layer", {}) or {}
+            bottleneck_score = float(target_layer.get("bottleneck_score", supply_chain.get("bottleneck_score", 0)) or 0)
+            evidence.append(f"产业链主题: {topic}; {position}"[:160])
+            if target_layer.get("supply_demand") == "tight":
+                score += 0.5
+            if bottleneck_score >= 5:
+                score += 0.5
+
         return ResearchDimensionScore("行业/TAM", DIMENSION_WEIGHTS["行业/TAM"], score, score, data_evidence=evidence)
 
-    def _moat_score(self, fundamentals: Dict, peers: List[Dict]) -> ResearchDimensionScore:
+    def _moat_score(self, fundamentals: Dict, peers: List[Dict], supply_chain: Optional[Dict] = None) -> ResearchDimensionScore:
         moat = fundamentals.get("moat")
         evidence = []
         if moat:
@@ -141,9 +153,21 @@ class ResearchScoreEngine:
                 evidence.append(f"ROE {roe:.1f}% 显示资本效率较好")
         if peers:
             evidence.append("同行对比可用于验证竞争优势")
+        if self._has_supply_chain(supply_chain):
+            target_layer = supply_chain.get("target_layer", {}) or {}
+            bottleneck_score = float(target_layer.get("bottleneck_score", supply_chain.get("bottleneck_score", 0)) or 0)
+            bottleneck_level = target_layer.get("bottleneck_level") or supply_chain.get("bottleneck_level") or "待确认"
+            if bottleneck_score >= 7:
+                score += 1.0
+            elif bottleneck_score >= 5:
+                score += 0.6
+            evidence.append(f"产业链瓶颈 {bottleneck_score:g}/10 ({bottleneck_level})")
+            if target_layer.get("certification_barrier"):
+                score += 0.3
+                evidence.append("客户认证壁垒来自产业链卡位")
         return ResearchDimensionScore("护城河", DIMENSION_WEIGHTS["护城河"], score, score, data_evidence=evidence)
 
-    def _growth_score(self, fundamentals: Dict) -> ResearchDimensionScore:
+    def _growth_score(self, fundamentals: Dict, supply_chain: Optional[Dict] = None) -> ResearchDimensionScore:
         score = 5.0
         evidence = []
         revenue_growth = self._percent(fundamentals.get("revenue_growth"))
@@ -174,6 +198,14 @@ class ResearchScoreEngine:
             else:
                 score -= 0.8
                 evidence.append("自由现金流为负")
+        if self._has_supply_chain(supply_chain):
+            target_layer = supply_chain.get("target_layer", {}) or {}
+            opportunities = supply_chain.get("opportunities", []) or []
+            if opportunities:
+                evidence.append(f"产业链机会: {opportunities[0]}")
+            if target_layer.get("supply_demand") == "tight" and target_layer.get("expansion_difficulty") == "high":
+                score += 0.4
+                evidence.append("所在层级供需紧张且扩产困难")
 
         return ResearchDimensionScore("增长质量", DIMENSION_WEIGHTS["增长质量"], score, score, data_evidence=evidence)
 
@@ -251,6 +283,12 @@ class ResearchScoreEngine:
                 score += 0.4
 
         return ResearchDimensionScore("团队/治理", DIMENSION_WEIGHTS["团队/治理"], score, score, data_evidence=evidence)
+
+    def _has_supply_chain(self, supply_chain: Optional[Dict]) -> bool:
+        """判断产业链数据是否可用于评分；缺失时保持原评分逻辑不变。"""
+        if not isinstance(supply_chain, dict):
+            return False
+        return supply_chain.get("status") in {"available", "fallback"}
 
     def _apply_evidence(self, dimensions: Dict[str, ResearchDimensionScore], item: EvidenceItem) -> None:
         credibility_delta = {"high": 0.6, "medium": 0.35, "low": 0.15}.get(getattr(item, "credibility", "medium"), 0.25)

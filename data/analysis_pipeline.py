@@ -169,6 +169,7 @@ def generate_analysis(code: str) -> Dict[str, Any]:
             'wiki_summary': str | None,
             'stock_info': dict,
             'fundamentals': dict,
+            'supply_chain': dict,
             'earnings': dict,
             'kline_rows': int,
             'technicals': dict,
@@ -227,6 +228,27 @@ def generate_analysis(code: str) -> Dict[str, Any]:
         output['fundamentals_error'] = str(e)
     except Exception as e:
         output['fundamentals_error'] = f"Unexpected: {str(e)}"
+
+    # ===== Step 1a: 产业链/供应链分析（基本面增强） =====
+    try:
+        from data.supply_chain import StockChainAnalyzer
+
+        sca = StockChainAnalyzer()
+        supply_chain = sca.analyze(
+            code,
+            stock_info=output.get('stock_info', {}),
+            fundamentals=output.get('fundamentals', {}) or {},
+        )
+        output['supply_chain'] = supply_chain
+        if isinstance(output.get('fundamentals'), dict):
+            output['fundamentals']['supply_chain'] = supply_chain
+            output['fundamentals']['industry_chain_position'] = supply_chain.get('position', '')
+    except ImportError:
+        output['supply_chain_error'] = 'StockChainAnalyzer module not available'
+    except (FileNotFoundError, KeyError, ValueError, OSError) as e:
+        output['supply_chain_error'] = str(e)
+    except Exception as e:
+        output['supply_chain_error'] = f"Unexpected: {str(e)}"
 
     # ===== Step 1.5: 财报预期 (earnings-preview) =====
     try:

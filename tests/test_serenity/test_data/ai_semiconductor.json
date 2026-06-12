@@ -1,0 +1,164 @@
+{
+  "topic": "AI 半导体",
+  "depth": "normal",
+  "summary": {
+    "description": "AI 半导体是支撑大模型训练和推理的核心硬件产业链",
+    "demand_driver": "大模型参数持续增长驱动算力需求，带动芯片、HBM、先进封装、设备投资"
+  },
+  "layers": [
+    {
+      "name": "下游需求",
+      "key_companies_cn": [
+        "字节跳动",
+        "腾讯",
+        "阿里巴巴"
+      ],
+      "key_companies_global": [
+        "Google",
+        "Microsoft",
+        "Meta"
+      ],
+      "supply_demand": "tight",
+      "expansion_difficulty": "low",
+      "certification_barrier": false,
+      "scarcity": "low"
+    },
+    {
+      "name": "系统集成",
+      "key_companies_cn": [
+        "浪潮信息",
+        "中科曙光"
+      ],
+      "key_companies_global": [
+        "Dell",
+        "HP",
+        "Super Micro"
+      ],
+      "supply_demand": "balanced",
+      "expansion_difficulty": "medium",
+      "certification_barrier": false,
+      "scarcity": "low"
+    },
+    {
+      "name": "芯片/器件",
+      "key_companies_cn": [
+        "海光信息",
+        "寒武纪",
+        "华为海思"
+      ],
+      "key_companies_global": [
+        "NVIDIA",
+        "AMD",
+        "Intel"
+      ],
+      "supply_demand": "tight",
+      "expansion_difficulty": "high",
+      "certification_barrier": true,
+      "scarcity": "high"
+    },
+    {
+      "name": "设备",
+      "key_companies_cn": [
+        "北方华创",
+        "中微公司",
+        "上海微电子"
+      ],
+      "key_companies_global": [
+        "ASML",
+        "Applied Materials",
+        "Lam Research"
+      ],
+      "supply_demand": "tight",
+      "expansion_difficulty": "high",
+      "certification_barrier": true,
+      "scarcity": "high"
+    },
+    {
+      "name": "HBM/先进封装",
+      "key_companies_cn": [
+        "长电科技",
+        "通富微电"
+      ],
+      "key_companies_global": [
+        "TSMC",
+        "SK Hynix",
+        "Samsung"
+      ],
+      "supply_demand": "tight",
+      "expansion_difficulty": "high",
+      "certification_barrier": true,
+      "scarcity": "high"
+    },
+    {
+      "name": "材料",
+      "key_companies_cn": [
+        "沪硅产业",
+        "安集科技"
+      ],
+      "key_companies_global": [
+        "信越化学",
+        "SUMCO",
+        "陶氏"
+      ],
+      "supply_demand": "tight",
+      "expansion_difficulty": "high",
+      "certification_barrier": true,
+      "scarcity": "high"
+    },
+    {
+      "name": "封测",
+      "key_companies_cn": [
+        "长电科技",
+        "华天科技",
+        "通富微电"
+      ],
+      "key_companies_global": [
+        "ASE",
+        "Amkor",
+        "JCET"
+      ],
+      "supply_demand": "balanced",
+      "expansion_difficulty": "medium",
+      "certification_barrier": false,
+      "scarcity": "low"
+    }
+  ],
+  "candidates": [
+    {
+      "company": "北方华创",
+      "layer": "设备",
+      "rationale": "国产设备龙头，受益于晶圆厂国产替代扩产",
+      "evidence": "financial",
+      "valuation_pressure": "high",
+      "risks": [
+        "ASML 光刻机出口管制",
+        "美国实体清单升级"
+      ],
+      "priority": 1
+    },
+    {
+      "company": "海光信息",
+      "layer": "芯片/器件",
+      "rationale": "国产 x86 CPU，AI 推理场景需求增长",
+      "evidence": "financial",
+      "valuation_pressure": "high",
+      "risks": [
+        "AMD IP 授权限制",
+        "Fab 产能瓶颈"
+      ],
+      "priority": 2
+    },
+    {
+      "company": "沪硅产业",
+      "layer": "材料",
+      "rationale": "大硅片国产化稀缺标的",
+      "evidence": "media",
+      "valuation_pressure": "high",
+      "risks": [
+        "良率爬坡不及预期",
+        "海外巨头价格战"
+      ],
+      "priority": 3
+    }
+  ]
+}
