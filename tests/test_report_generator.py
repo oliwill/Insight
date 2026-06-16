@@ -315,7 +315,7 @@ def test_supply_chain_only_does_not_hide_missing_core_fundamentals():
     assert "**基本面**" in markdown
 
 
-def test_opening_conclusion_defaults_to_watch_when_timing_missing_and_target_upside_positive():
+def test_moat_stress_test_is_rendered_inside_fundamental_section_not_independent_section():
     markdown = ReportGenerator.generate(
         "MU.US",
         {
@@ -323,17 +323,95 @@ def test_opening_conclusion_defaults_to_watch_when_timing_missing_and_target_ups
                 "code": "MU.US",
                 "name": "Micron Technology",
                 "price": 120.0,
+                "sector": "Technology",
                 "industry": "Semiconductor Memory",
+                "business_summary": "Micron makes DRAM, NAND and HBM.",
             },
             "fundamentals": {
                 "pe_forward": 12.5,
                 "pb": 2.1,
-                "target_mean_price": 145.0,
+                "gross_margin": 0.38,
+                "moat_stress_test": {
+                    "subject": {
+                        "company": "Micron Technology",
+                        "code": "MU.US",
+                        "sector": "Technology",
+                        "industry": "Semiconductor Memory",
+                        "business_model": "产品公司",
+                        "peer_count": 3,
+                    },
+                    "confirmed_facts": [
+                        {"claim": "毛利率约 38.0%", "source": "gross_margin", "confidence": "confirmed"},
+                    ],
+                    "reasonable_inferences": [
+                        {"claim": "毛利率显示存在一定定价权。", "basis": "gross_margin", "confidence": "inferred"},
+                    ],
+                    "assumptions_to_verify": [
+                        {"hypothesis": "客户集中度是否过高", "verification_path": "查年报", "risk_if_false": "客户流失风险", "key": "customer_concentration", "priority": "high"},
+                    ],
+                    "peer_relative_strength": {
+                        "available": True,
+                        "peer_sample_size": 2,
+                        "comparisons": [
+                            {"metric": "gross_margin", "target": 0.38, "peer_median": 0.29, "diff_percentage_points": 9.0, "direction": "above"},
+                        ],
+                        "summary": "毛利率高于同行中位数约 9.0 个百分点。",
+                    },
+                    "attack_budget_tiers": {
+                        "available": True,
+                        "target_market_cap": 120e9,
+                        "tiers": {
+                            "low": {"budget": 1.2e9, "first_year_focus": "复制标准化功能", "realistic_3_year_reach": "追平边缘渠道", "recommended_angle": "绕开核心市场"},
+                            "mid": {"budget": 6e9, "first_year_focus": "建立产能", "realistic_3_year_reach": "追上部分产品线", "recommended_angle": "局部正面试探"},
+                            "high": {"budget": 24e9, "first_year_focus": "全链路复制", "realistic_3_year_reach": "正面争夺份额", "recommended_angle": "可正面进攻核心市场"},
+                        },
+                        "note": "预算量级基于目标公司市值推断。",
+                    },
+                    "perspectives": {
+                        "founder_competitor": {
+                            "prompt_role": "创业者/竞争对手",
+                            "attack_vectors": ["价格战"],
+                            "defense_signals": ["已有规模"],
+                            "unknowns": ["客户集中度"],
+                        },
+                        "industry_researcher": {
+                            "prompt_role": "产业研究员",
+                            "structure_observations": ["利润池在瓶颈环节"],
+                            "profit_pool_hypotheses": ["利润池可能在产能和认证"]
+                        },
+                        "long_term_investor": {
+                            "prompt_role": "长期投资者",
+                            "durability_signals": ["现金流为正"],
+                            "fragility_signals": ["估值偏高"],
+                            "unknowns": ["替代技术"],
+                            "conclusion": "正在把投入转化为长期壁垒的公司",
+                        },
+                    },
+                    "conclusion": {
+                        "one_line_business": "Micron 的真正生意是产品公司，而不是简单的行业标签。",
+                        "one_line_moat": "最核心的护城河目前更像是产能和认证。",
+                        "one_line_hardest_to_copy": "竞争对手最难复制的是供应链卡位。",
+                        "one_line_market_fear": "市场担心估值先于壁垒兑现。",
+                        "one_line_verification": "客户集中度是否过高",
+                        "classification": "正在把投入转化为长期壁垒的公司",
+                        "rationale": "护城河、现金流和利润率至少有两项同时指向可持续性。",
+                        "cyclical_caveat": "该公司处于周期性行业，当前利润率可能反映周期位置而非稳态。",
+                    },
+                },
             },
-            "technicals": {"support_20d": 110.0},
         },
     )
 
-    opening = markdown.split("## 一、本次分析总结", 1)[1].splitlines()[2]
-    assert "建议观望" in opening
-    assert "建议回避" not in opening
+    assert "### 护城河压力测试" in markdown
+    assert "## 三、基本面与估值" in markdown
+    assert markdown.index("## 三、基本面与估值") < markdown.index("### 护城河压力测试")
+    assert "#### 创业者/竞争对手视角" in markdown
+    assert "#### 已确认事实" in markdown
+    assert "#### 合理推断" in markdown
+    assert "#### 需要验证的假设" in markdown
+    assert "#### 同行相对强弱" in markdown
+    assert "#### 竞争对手攻击模拟（三档预算）" in markdown
+    assert "[高]" in markdown  # 优先级标签
+    assert "周期性提示" in markdown
+    assert "最终判断" in markdown
+    assert not any(line == "## 护城河压力测试" for line in markdown.splitlines())

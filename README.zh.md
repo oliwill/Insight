@@ -26,6 +26,7 @@ Obsidian Analysis wiki + Dashboard + Tasks
 |---|---|---|
 | 证据层 | 把 wiki、Materials、Inbox 内容转成结构化 claim | `## 证据表` |
 | 产业链位置 | Serenity 式确定性供应链瓶颈上下文，归入基本面 | `fundamentals.supply_chain` + 报告 `### 产业链位置` |
+| 护城河压力测试 | 面向新进入者/产业研究员/长期投资者的确定性叙事压力测试 | `fundamentals.moat_stress_test` + 报告 `### 护城河压力测试` |
 | Research Score | 五维公司/投资 thesis 质量评分 | `## 五维打分` |
 | Timing State | 独立于公司质量的交易时机状态机 | `Ready / Wait / Watch / Avoid` |
 | Backtest | 在持有窗口后验证历史时间线信号 | `## 预测验证` + `output/review_*` |

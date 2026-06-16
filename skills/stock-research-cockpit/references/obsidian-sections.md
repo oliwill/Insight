@@ -25,6 +25,7 @@ Module sections may append:
 - `期权市场`
 - `社交情绪`
 - `交叉引用`
+- `护城河压力测试`（作为基本面子章节写入 `研究笔记`，不要升级为顶层 wiki section）
 
 ## File Naming
 

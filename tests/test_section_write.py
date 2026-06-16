@@ -54,13 +54,15 @@ def test_module_section_append_does_not_create_duplicate_top_level_heading():
     assert "- **机构持仓**: 34.5%" in _get_section_content(updated, "流动性分析")
 
 
-def test_research_note_append_keeps_full_report_inside_research_section():
-    wiki = "# TEST\n\n## 研究笔记\n\n（暂无）\n\n## 交叉引用\n\n（暂无）\n"
-    report = run_analysis._demote_markdown_headings("# 手工分析\n\n## 一、核心观点\n\n正文")
+def test_research_note_append_demotes_competitor_pressure_heading():
+    wiki = "# TEST\n\n## 研究笔记\n\n（暂无）\n"
+    report = "# 手工分析\n\n## 三、基本面与估值\n\n### 护城河压力测试\n\n正文"
+    demoted = run_analysis._demote_markdown_headings(report)
 
-    updated = _append_to_section(wiki, "研究笔记", report)
+    updated = _append_to_section(wiki, "研究笔记", demoted)
     content = _get_section_content(updated, "研究笔记")
 
     assert "### 手工分析" in content
-    assert "### 一、核心观点" in content
+    assert "#### 护城河压力测试" in content
     assert not re.search(r"^##\s+手工分析\s*$", content, re.MULTILINE)
+    assert not re.search(r"^##\s+护城河压力测试\s*$", content, re.MULTILINE)

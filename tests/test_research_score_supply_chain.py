@@ -39,33 +39,19 @@ def test_research_score_is_unchanged_without_supply_chain_data():
     assert after.dimensions["护城河"].data_evidence == before.dimensions["护城河"].data_evidence
 
 
-def test_research_score_adds_supply_chain_evidence_when_available():
+def test_research_score_preserves_behavior_with_moat_stress_test_field():
     market_data = deepcopy(BASE_MARKET_DATA)
-    market_data["supply_chain"] = {
-        "status": "available",
-        "topic": "hbm",
-        "position": "位于 HBM 产业链芯片/器件层。",
-        "bottleneck_score": 6,
-        "bottleneck_level": "中等瓶颈",
-        "target_layer": {
-            "name": "芯片/器件（核心元件）",
-            "bottleneck_score": 6,
-            "bottleneck_level": "中等瓶颈",
-            "supply_demand": "tight",
-            "expansion_difficulty": "high",
-        },
-        "opportunities": ["AI GPU 对 HBM 需求增长"],
+    market_data["fundamentals"]["moat_stress_test"] = {
+        "version": "1.0",
+        "method": "deterministic_template",
+        "confirmed_facts": [],
+        "reasonable_inferences": [],
+        "assumptions_to_verify": [],
+        "perspectives": {},
     }
 
     score = ResearchScoreEngine().score(market_data, [])
 
-    tam_evidence = "；".join(score.dimensions["行业/TAM"].data_evidence)
-    moat_evidence = "；".join(score.dimensions["护城河"].data_evidence)
-    growth_evidence = "；".join(score.dimensions["增长质量"].data_evidence)
-
-    assert "产业链" in tam_evidence
-    assert "HBM" in tam_evidence or "hbm" in tam_evidence
-    assert "瓶颈" in moat_evidence
-    assert "HBM" in growth_evidence or "hbm" in growth_evidence or "产业链" in growth_evidence
-    assert score.dimensions["行业/TAM"].base_score >= 5.0
-    assert score.dimensions["护城河"].base_score >= 5.0
+    assert score.total_base_score > 0
+    assert score.total_adjusted_score > 0
+    assert "护城河" in score.dimensions

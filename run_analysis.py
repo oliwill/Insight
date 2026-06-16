@@ -14,6 +14,15 @@
   然后调用 write_* 辅助函数将结果写回 Obsidian
 """
 import json
+from decimal import Decimal
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """自定义 JSON 编码器，处理 Decimal 类型"""
+    def default(self, o):
+        if isinstance(o, Decimal):
+            return float(o)
+        return super().default(o)
 import os
 import shutil
 import sys
@@ -563,7 +572,7 @@ def main():
             "inbox_materials": inbox_materials,
         }
 
-        print(json.dumps(output, ensure_ascii=False, indent=2))
+        print(json.dumps(output, ensure_ascii=False, indent=2, cls=DecimalEncoder))
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@
 """
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -79,6 +79,724 @@ class MoatAnalysis:
     overall_rating: str
     dimensions: List[MoatDimension]
     summary: str
+
+
+MOAT_STRESS_TEST_PROMPT_TEMPLATE = """我想研究【{company}】所在的【{industry}】。
+
+请你不要直接评价这家公司好不好，而是假设我是一个资金充足、执行力很强的新进入者，准备从 0 开始做同样的生意，并在【3-10 年】内挑战【{company}】。
+
+请你站在三个视角分析：
+
+创业者/竞争对手视角：如果我要从 0 做起来，我会被卡在哪里？
+产业研究员视角：这个行业真正的关键资源和利润来源是什么？
+长期投资者视角：这家公司是否具备可持续护城河，是否值得长期跟踪或持有？
+
+在回答前，请先做 3 件事：
+
+A. 明确业务边界
+请先说明【{company}】到底靠哪些业务赚钱，不要把公司简单等同于一个行业。
+例如：它是产品公司、平台公司、渠道公司、基础设施公司、资源型公司，还是多种模式叠加？
+
+B. 区分事实、推断和假设
+请在分析中明确标注：
+已确认事实
+基于事实的合理推断
+需要进一步验证的假设
+
+C. 如果信息不足，请不要编造
+请直接说明哪些信息需要查年报、财报电话会、投资者日、行业报告、监管文件或客户/供应链数据验证。
+请按以下框架拆解：
+
+一、行业从 0 做起来的完整流程
+
+假设我是新进入者，从 0 开始做这个行业，请拆解完整流程：
+我要先解决什么问题？
+
+需要做出什么产品或服务？
+
+需要哪些核心技术？
+
+需要哪些供应链资源？
+
+需要哪些基础设施？
+需要哪些人才和组织能力？
+需要哪些销售渠道和客户关系？
+需要多少资金，资金主要花在哪里？
+需要哪些监管、牌照、认证或政策支持？
+从启动到商业化，大概需要多久？
+请不要只列清单，要说明每一步为什么重要。
+
+二、进入这个行业最难的 5-7 个环节
+请找出这个行业最难突破的 5-7 个关键环节。
+每个环节请说明：
+
+难在哪里
+
+需要多少钱
+
+需要多长时间
+
+需要哪些稀缺资源
+
+新进入者最容易死在哪里
+有钱能不能解决
+如果不能完全靠钱解决，真正缺的是什么
+
+三、目标公司在关键环节里的位置
+请分析【{company}】在上述关键环节里分别占据什么优势。
+请区分以下类型：
+技术优势
+产品优势
+成本优势
+规模优势
+客户关系
+渠道优势
+数据优势
+生态优势
+品牌信任
+监管/牌照优势
+资本开支和融资能力
+供应链卡位
+基础设施卡位
+时间窗口和先发优势
+请进一步判断：
+这些优势是“强护城河”“阶段性优势”，还是“容易被竞争对手追平的优势”？
+
+四、竞争对手攻击模拟
+假设我是竞争对手，分别给我三档预算：
+低预算：【金额】
+中预算：【金额】
+高预算：【金额】
+
+请分别告诉我：
+
+第一年度我应该做什么？
+
+三年内我能追上【{company}】哪些部分？
+哪些部分即使有钱也很难追上？
+我最现实的切入点在哪里？
+
+我应该正面进攻，还是绕开它？
+
+如果绕开它，最好的细分市场是什么？
+如果正面进攻，最大风险是什么？
+我最终有多大概率撼动它的核心地位？
+
+五、护城河压力测试
+请不要泛泛而谈“品牌、技术、规模”。
+请判断【{company}】真正的护城河是什么，并回答：
+这个护城河来自哪里？
+它是技术壁垒、客户锁定、成本优势、网络效应、监管优势、供应链优势，还是资本密集带来的进入门槛？
+
+这个护城河能不能转化为利润？
+
+它能不能提高毛利率、经营利润率、自由现金流或 ROIC？
+
+它能持续多久？
+
+它会不会被新技术、新商业模式或政策变化绕开？
+什么情况下这个护城河会失效？
+如果我是竞争对手，攻击这个护城河最有效的方法是什么？
+
+六、财务和商业模式验证
+请从投资角度进一步分析：
+这家公司的收入增长来自哪里？
+增长是靠行业扩张、价格提升、份额提升，还是并购/资本开支驱动？
+毛利率和经营利润率是否能稳定或提升？
+
+自由现金流质量如何？
+
+资本开支是维护性投入，还是扩张性投入？
+
+资产负债表是否能支撑长期扩张？
+公司增长是否依赖少数大客户？
+如果公司现在大幅投资，未来能否形成更高利润和现金流？
+这个商业模式更像轻资产软件、重资产基础设施、周期品，还是平台型生意？
+
+七、长期持有判断
+请不要直接给“买/卖”建议，而是判断它是否具备长期跟踪或长期持有的条件。
+请输出：
+长期看好的核心逻辑
+短期市场担心什么
+
+哪些担心是合理的
+
+哪些担心可能是市场过度反应
+
+未来 3 年最重要的 5 个验证指标
+
+一旦出现哪些信号，说明投资逻辑变了
+什么情况下可以安心持有
+什么情况下必须重新评估
+这家公司适合什么类型的投资者，不适合什么类型的投资者
+
+八、最后请给出一个结论
+请用以下格式总结：
+一句话判断这家公司真正的生意是什么。
+一句话判断它最核心的护城河是什么。
+一句话判断竞争对手最难复制的地方是什么。
+
+一句话判断市场目前最担心什么。
+
+一句话判断未来最值得验证的指标是什么。
+
+最后给出一个结论：这家公司是“短期被高估的叙事”，还是“正在把投入转化为长期壁垒的公司”？请说明理由。"""
+
+
+def _compact_text(value: Any, limit: int = 140) -> str:
+    if value is None:
+        return ""
+    text = " ".join(str(value).split())
+    if not text:
+        return ""
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _format_metric(value: Any, suffix: str = "", digits: int = 1) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (int, float)):
+        if suffix == "%":
+            return f"{float(value) * 100:.{digits}f}%" if abs(float(value)) <= 1 else f"{float(value):.{digits}f}%"
+        if suffix == "x":
+            return f"{float(value):.{digits}f}x"
+        return f"{float(value):.{digits}f}{suffix}"
+    return f"{value}{suffix}"
+
+
+def _first_sentence(text: str) -> str:
+    if not text:
+        return ""
+    for sep in ("。", ".", "！", "!", "；", ";", "\n"):
+        if sep in text:
+            return text.split(sep, 1)[0].strip()
+    return text.strip()
+
+
+def _infer_business_model(stock_info: Dict[str, Any], fundamentals: Dict[str, Any]) -> str:
+    summary = " ".join(
+        str(part)
+        for part in [
+            stock_info.get("business_summary"),
+            fundamentals.get("business_summary"),
+            stock_info.get("sector"),
+            stock_info.get("industry"),
+            fundamentals.get("sector"),
+            fundamentals.get("industry"),
+        ]
+        if part
+    ).lower()
+
+    if any(keyword in summary for keyword in ("platform", "marketplace", "ecosystem", "network", "平台", "生态")):
+        return "平台公司"
+    if any(keyword in summary for keyword in ("channel", "distribution", "dealer", "retail", "渠道", "经销")):
+        return "渠道公司"
+    if any(keyword in summary for keyword in ("infrastructure", "cloud", "datacenter", "data center", "power", "equipment", "foundry", "fab", "基础设施", "设备")):
+        return "基础设施公司"
+    if any(keyword in summary for keyword in ("resource", "mining", "oil", "gas", "commodity", "矿", "资源")):
+        return "资源型公司"
+    if any(keyword in summary for keyword in ("software", "saas", "subscription", "应用", "软件")):
+        return "产品/订阅型公司"
+    if "and" in summary or "叠加" in summary or "hybrid" in summary:
+        return "多种模式叠加"
+    return "产品公司"
+
+
+def _company_peer_names(peers: Any) -> List[str]:
+    names: List[str] = []
+    for peer in peers or []:
+        if isinstance(peer, dict):
+            candidate = peer.get("name") or peer.get("symbol") or peer.get("code")
+        else:
+            candidate = str(peer)
+        candidate = _compact_text(candidate, 40)
+        if candidate and candidate not in names:
+            names.append(candidate)
+    return names
+
+
+def _metric_fact(label: str, value: Any, suffix: str = "", digits: int = 1) -> Dict[str, str] | None:
+    formatted = _format_metric(value, suffix=suffix, digits=digits)
+    if not formatted:
+        return None
+    return {"claim": f"{label}为 {formatted}", "source": label, "confidence": "confirmed"}
+
+
+# ========== 阶段一：确定性脚手架强化辅助函数 ==========
+
+# 同行横向对比关注的财务字段
+_PEER_METRIC_KEYS = ["market_cap", "gross_margin", "revenue_growth", "roe"]
+_PEER_METRIC_LABELS = {
+    "market_cap": "市值",
+    "gross_margin": "毛利率",
+    "revenue_growth": "营收增速",
+    "roe": "ROE",
+}
+
+
+def _peer_metric_values(peers: Any, key: str) -> List[float]:
+    """从 peers 列表提取指定财务字段的合法数值（nan 被排除）。"""
+    values: List[float] = []
+    for peer in peers or []:
+        if not isinstance(peer, dict):
+            continue
+        value = peer.get(key)
+        # value == value 排除 nan（nan != nan）
+        if isinstance(value, (int, float)) and value == value:
+            values.append(float(value))
+    return values
+
+
+def _peer_relative_strength(
+    target_metrics: Dict[str, Any],
+    peers: Any,
+) -> Dict[str, Any]:
+    """计算目标公司相对同行中位数的偏离，产出横向强弱信号。
+
+    只消费 peer dict 里已存在的财务字段；某字段样本不足（<2 家含该字段）时跳过该字段。
+    若所有字段都不可比，整体降级返回空 dict（不报错）。
+    """
+    comparisons: List[Dict[str, Any]] = []
+    sample_sizes: List[int] = []
+    for key in _PEER_METRIC_KEYS:
+        peer_vals = _peer_metric_values(peers, key)
+        if len(peer_vals) < 2:
+            continue
+        target_val = target_metrics.get(key)
+        if not isinstance(target_val, (int, float)) or target_val != target_val:
+            continue
+        peer_median = float(np.median(peer_vals))
+        direction = "above" if target_val > peer_median else "below"
+        if key == "market_cap":
+            if peer_median <= 0:
+                continue
+            comparisons.append({
+                "metric": key,
+                "target": target_val,
+                "peer_median": peer_median,
+                "ratio_vs_peer_median": round(target_val / peer_median, 2),
+                "direction": direction,
+            })
+        else:
+            comparisons.append({
+                "metric": key,
+                "target": round(target_val, 4),
+                "peer_median": round(peer_median, 4),
+                "diff_percentage_points": round((target_val - peer_median) * 100, 1),
+                "direction": direction,
+            })
+        sample_sizes.append(len(peer_vals))
+
+    if not comparisons:
+        return {}
+
+    summary_parts = []
+    for comp in comparisons:
+        label = _PEER_METRIC_LABELS.get(comp["metric"], comp["metric"])
+        if comp["metric"] == "market_cap":
+            summary_parts.append(f"{label}约为同行中位数的 {comp['ratio_vs_peer_median']}x")
+        else:
+            sign = "高" if comp["direction"] == "above" else "低"
+            summary_parts.append(
+                f"{label}{sign}于同行中位数约 {abs(comp['diff_percentage_points']):.1f} 个百分点"
+            )
+    return {
+        "available": True,
+        "peer_sample_size": min(sample_sizes) if sample_sizes else 0,
+        "comparisons": comparisons,
+        "summary": "；".join(summary_parts) + "。" if summary_parts else "",
+    }
+
+
+def _attack_budget_tiers(
+    market_cap: Any,
+    supply_chain_bottleneck: Any,
+) -> Dict[str, Any]:
+    """基于目标公司市值推断攻击者三档预算量级及对应攻击建议。
+
+    微型股做下限保护；供应瓶颈强度影响正面进攻的现实性判断。
+    market_cap 不可用时整体降级返回空。
+    """
+    if not isinstance(market_cap, (int, float)) or market_cap != market_cap or market_cap <= 0:
+        return {}
+
+    mc = float(market_cap)
+    low = max(mc * 0.01, 10e6)
+    mid = max(mc * 0.05, 50e6)
+    high = max(mc * 0.20, 200e6)
+    bottleneck = isinstance(supply_chain_bottleneck, (int, float)) and supply_chain_bottleneck >= 6
+
+    def _tier(amount: float, focus: str, reach: str, angle: str) -> Dict[str, Any]:
+        return {
+            "budget": round(amount, 0),
+            "first_year_focus": focus,
+            "realistic_3_year_reach": reach,
+            "recommended_angle": angle,
+        }
+
+    tiers = {
+        "low": _tier(
+            low,
+            "复制最易标准化的产品功能或渠道流程，单点切入被忽视的细分场景。",
+            "最多追平目标公司的非核心产品线或边缘渠道。",
+            "绕开核心市场，主攻细分场景。",
+        ),
+        "mid": _tier(
+            mid,
+            "建立最小可行产能、启动关键认证、锁定首批头部客户。",
+            "可追上目标公司的中等产品线或区域市场，但核心壁垒仍难撼动。"
+            if bottleneck
+            else "可追上目标公司部分产品线和渠道份额。",
+            "绕开为主，局部正面试探。",
+        ),
+        "high": _tier(
+            high,
+            "全链路复制：产能、认证、渠道、品牌同时投入，正面竞争。",
+            "可正面争夺核心市场份额，但"
+            + ("产能/认证类壁垒仍需额外 2-3 年。" if bottleneck else "网络效应/客户锁定类壁垒仍难完全突破。"),
+            "可正面进攻核心市场。",
+        ),
+    }
+    return {
+        "available": True,
+        "target_market_cap": round(mc, 0),
+        "tiers": tiers,
+        "note": "预算量级基于目标公司市值推断，仅作为攻击模拟的参照基准。",
+    }
+
+
+# 假设键 → 业务模式/行业下的优先级映射表
+def _assumption_priority(key: str, business_model: str, sector: str, industry: str) -> str:
+    """根据业务模式和行业，给假设分配优先级 high/medium/low。"""
+    s = " ".join(str(x).lower() for x in [sector, industry])
+    is_cyclical = any(
+        k in s
+        for k in ("energy", "semiconductor", "commodity", "mining", "oil", "gas", "周期", "半导体", "能源", "矿业")
+    )
+    is_platform = "平台" in business_model
+    is_infra = "基础设施" in business_model
+    is_resource = "资源" in business_model
+    is_product = "产品" in business_model and not is_platform
+
+    table = {
+        "customer_concentration": "high" if (is_product or is_platform) else "medium",
+        "switching_cost": "high" if (is_platform or is_product) else "medium",
+        "price_competition": "high" if is_product else ("medium" if is_platform else "low"),
+        "capex_roi": "high" if (is_infra or is_resource or is_cyclical) else "medium",
+        "regulatory": "high" if (is_infra or is_resource or "金融" in s or "financial" in s) else "medium",
+        "supply_chain": "high" if (is_infra or is_resource or is_product) else ("low" if is_platform else "medium"),
+        "substitute_tech": "high" if (is_product or is_platform) else "medium",
+    }
+    return table.get(key, "medium")
+
+
+def _detect_cyclical(fundamentals: Dict[str, Any], sector: str, industry: str) -> Dict[str, Any]:
+    """识别周期性行业公司，返回周期性警示（非周期则返回空）。"""
+    s = " ".join(
+        str(x).lower()
+        for x in [sector, industry, fundamentals.get("business_summary") or ""]
+    )
+    cyclical_keywords = (
+        "energy", "semiconductor", "commodity", "mining", "oil", "gas",
+        "steel", "chemical", "shipping", "周期", "半导体", "能源", "矿业", "钢铁", "化工", "航运",
+    )
+    if any(k in s for k in cyclical_keywords):
+        return {
+            "is_cyclical": True,
+            "caveat": (
+                "该公司处于周期性行业，当前的高利润率或低估值可能反映周期位置而非稳态盈利能力，"
+                "需结合产能周期、库存周期和产品价格周期交叉验证。"
+            ),
+        }
+    return {}
+
+
+def build_moat_stress_test(stock_info: Dict[str, Any], fundamentals: Dict[str, Any], peers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    stock_info = stock_info or {}
+    fundamentals = fundamentals or {}
+    peers = peers or []
+
+    company = stock_info.get("name") or stock_info.get("code") or "未知公司"
+    code = stock_info.get("code") or fundamentals.get("code") or ""
+    sector = stock_info.get("sector") or fundamentals.get("sector") or "未知行业"
+    industry = stock_info.get("industry") or fundamentals.get("industry") or sector
+    business_model = _infer_business_model(stock_info, fundamentals)
+    business_summary = _compact_text(stock_info.get("business_summary") or fundamentals.get("business_summary"), 220)
+    peer_names = _company_peer_names(peers)
+
+    moat = fundamentals.get("moat")
+    moat_overall_score = None
+    moat_summary = ""
+    moat_dims: List[str] = []
+    if moat:
+        if hasattr(moat, "overall_score"):
+            moat_overall_score = getattr(moat, "overall_score", None)
+            moat_summary = getattr(moat, "summary", "") or ""
+            moat_dims = [getattr(d, "name", "") for d in getattr(moat, "dimensions", []) if getattr(d, "name", "")]
+        else:
+            moat_overall_score = moat.get("overall_score") if isinstance(moat, dict) else None
+            moat_summary = (moat.get("summary", "") if isinstance(moat, dict) else "") or ""
+            moat_dims = [d.get("name", "") for d in moat.get("dimensions", []) if isinstance(d, dict) and d.get("name")] if isinstance(moat, dict) else []
+
+    supply_chain = fundamentals.get("supply_chain")
+    supply_chain_topic = ""
+    supply_chain_position = ""
+    supply_chain_bottleneck = None
+    supply_chain_level = ""
+    if isinstance(supply_chain, dict) and supply_chain.get("status") in {"available", "fallback"}:
+        supply_chain_topic = str(supply_chain.get("topic") or "")
+        supply_chain_position = str(supply_chain.get("position") or "")
+        supply_chain_bottleneck = supply_chain.get("bottleneck_score") or (supply_chain.get("target_layer") or {}).get("bottleneck_score")
+        supply_chain_level = str(supply_chain.get("bottleneck_level") or (supply_chain.get("target_layer") or {}).get("bottleneck_level") or "")
+
+    gross_margin = fundamentals.get("gross_margin")
+    operating_margin = fundamentals.get("operating_margin")
+    profit_margin = fundamentals.get("profit_margin")
+    roe = fundamentals.get("roe")
+    roa = fundamentals.get("roa")
+    revenue_growth = fundamentals.get("revenue_growth")
+    earnings_growth = fundamentals.get("earnings_growth")
+    free_cashflow = fundamentals.get("free_cashflow")
+    current_ratio = fundamentals.get("current_ratio")
+    debt_equity = fundamentals.get("debt_equity")
+    market_cap = fundamentals.get("market_cap")
+    pe_forward = fundamentals.get("pe_forward")
+    ps = fundamentals.get("ps")
+
+    # 阶段一：同行相对强弱 + 三档预算攻击模拟 + 周期性识别
+    target_metrics_for_peers = {
+        "market_cap": market_cap,
+        "gross_margin": gross_margin,
+        "revenue_growth": revenue_growth,
+        "roe": roe,
+    }
+    peer_relative_strength = _peer_relative_strength(target_metrics_for_peers, peers)
+    attack_budget_tiers = _attack_budget_tiers(market_cap, supply_chain_bottleneck)
+    cyclical = _detect_cyclical(fundamentals, sector, industry)
+
+    confirmed_facts = [
+        {"claim": f"研究对象为 {company}（{code or '代码未填'}）", "source": "stock_info.name/code", "confidence": "confirmed"},
+        {"claim": f"业务语境为 {sector} / {industry}", "source": "stock_info.sector/industry", "confidence": "confirmed"},
+        {"claim": f"业务模式暂归类为 {business_model}", "source": "business_summary + sector + industry", "confidence": "confirmed"},
+    ]
+    if business_summary:
+        confirmed_facts.append({"claim": f"公开业务摘要：{_first_sentence(business_summary)}", "source": "fundamentals.business_summary", "confidence": "confirmed"})
+    for label, value, suffix, digits in [
+        ("gross_margin", gross_margin, "%", 1),
+        ("operating_margin", operating_margin, "%", 1),
+        ("profit_margin", profit_margin, "%", 1),
+        ("roe", roe, "%", 1),
+        ("roa", roa, "%", 1),
+        ("revenue_growth", revenue_growth, "%", 1),
+        ("earnings_growth", earnings_growth, "%", 1),
+        ("free_cashflow", free_cashflow, "", 1),
+        ("current_ratio", current_ratio, "x", 2),
+        ("debt_equity", debt_equity, "x", 2),
+        ("market_cap", market_cap, "", 0),
+        ("pe_forward", pe_forward, "x", 2),
+        ("ps", ps, "x", 2),
+    ]:
+        fact = _metric_fact(label, value, suffix=suffix, digits=digits)
+        if fact:
+            confirmed_facts.append(fact)
+    if peer_names:
+        confirmed_facts.append({"claim": f"当前同行对照样本包括 {', '.join(peer_names[:5])}", "source": "peers", "confidence": "confirmed"})
+    if supply_chain_position or supply_chain_topic:
+        confirmed_facts.append({"claim": f"供应链/产业链上下文：{supply_chain_position or supply_chain_topic}", "source": "fundamentals.supply_chain", "confidence": "confirmed"})
+    if moat_summary:
+        confirmed_facts.append({"claim": f"现有护城河摘要：{moat_summary}", "source": "fundamentals.moat.summary", "confidence": "confirmed"})
+
+    reasonable_inferences: List[Dict[str, str]] = []
+    if isinstance(gross_margin, (int, float)) and gross_margin >= 0.4:
+        reasonable_inferences.append({"claim": f"毛利率约 {_format_metric(gross_margin, '%', 1)}，说明定价权或产品差异化至少已经部分成立。", "basis": "gross_margin", "confidence": "inferred"})
+    if isinstance(operating_margin, (int, float)) and operating_margin >= 0.15:
+        reasonable_inferences.append({"claim": f"经营利润率约 {_format_metric(operating_margin, '%', 1)}，说明规模化后利润池可能存在。", "basis": "operating_margin", "confidence": "inferred"})
+    if isinstance(revenue_growth, (int, float)) and revenue_growth >= 0.15:
+        reasonable_inferences.append({"claim": f"营收增长约 {_format_metric(revenue_growth, '%', 1)}，行业扩张或份额提升仍在发生。", "basis": "revenue_growth", "confidence": "inferred"})
+    if isinstance(free_cashflow, (int, float)) and free_cashflow > 0:
+        reasonable_inferences.append({"claim": "自由现金流为正，增长开始转化为现金而不只是规模。", "basis": "free_cashflow", "confidence": "inferred"})
+    if isinstance(supply_chain_bottleneck, (int, float)) and supply_chain_bottleneck >= 6:
+        reasonable_inferences.append({"claim": f"供应链/产业链瓶颈分约 {supply_chain_bottleneck:.0f}/10，进入该环节不仅要花钱，还要花时间、认证和产能。", "basis": "supply_chain.bottleneck_score", "confidence": "inferred"})
+    if isinstance(moat_overall_score, (int, float)) and moat_overall_score >= 7:
+        reasonable_inferences.append({"claim": f"现有护城河综合评分约 {moat_overall_score:.1f}/10，当前优势不只是短期叙事。", "basis": "fundamentals.moat.overall_score", "confidence": "inferred"})
+    if len(peer_names) >= 3:
+        reasonable_inferences.append({"claim": f"同行样本至少 {len(peer_names)} 家，说明竞争并不稀薄，必须用份额、成本和渠道数据验证优势。", "basis": "peers", "confidence": "inferred"})
+    if peer_relative_strength and peer_relative_strength.get("summary"):
+        reasonable_inferences.append({"claim": peer_relative_strength["summary"], "basis": "peer_relative_strength", "confidence": "inferred"})
+
+    assumptions_to_verify = [
+        {"key": "customer_concentration", "hypothesis": "客户集中度是否过高", "verification_path": "查年报、10-K/20-F、财报电话会、客户名单与应收账款说明", "risk_if_false": "少数客户一旦流失，收入和毛利率会同时承压"},
+        {"key": "switching_cost", "hypothesis": "切换成本是否足够高", "verification_path": "查客户案例、实施周期、系统集成深度、合同年限、续约条款", "risk_if_false": "竞争对手可用更低价格快速抢单"},
+        {"key": "price_competition", "hypothesis": "价格竞争是否会快速侵蚀毛利", "verification_path": "查毛利率趋势、ASP、行业报告、电话会对定价的描述", "risk_if_false": "高增长可能只是换来的低质量收入"},
+        {"key": "capex_roi", "hypothesis": "资本开支是否真的转化为更高利润池", "verification_path": "查 capex 指引、投资者日、产能利用率、ROIC/FCF 趋势", "risk_if_false": "投入回报不足，壁垒无法兑现"},
+        {"key": "regulatory", "hypothesis": "监管/牌照/认证门槛是否存在", "verification_path": "查监管文件、牌照清单、认证周期、客户准入标准", "risk_if_false": "资金更充足的对手可以直接复制"},
+        {"key": "supply_chain", "hypothesis": "供应链卡位是否真实", "verification_path": "查上游采购、产能扩张周期、供应商集中度、交付周期", "risk_if_false": "瓶颈只是阶段性的，不是长期壁垒"},
+        {"key": "substitute_tech", "hypothesis": "替代技术是否正在出现", "verification_path": "查行业报告、专利、产品路线图、竞品发布", "risk_if_false": "当前护城河会被新技术绕开"},
+    ]
+    # 按业务模式/行业赋予优先级
+    for assumption in assumptions_to_verify:
+        assumption["priority"] = _assumption_priority(
+            assumption.get("key", ""), business_model, sector, industry
+        )
+
+    competitor_attack_vectors = []
+    defense_signals = []
+    unknowns = []
+    if isinstance(gross_margin, (int, float)) and gross_margin < 0.35:
+        competitor_attack_vectors.append("先打价格和渠道，用更低毛利快速抢份额。")
+    else:
+        competitor_attack_vectors.append("先复制最容易标准化的功能/流程，再用更低成本或更快交付切入。")
+    if isinstance(supply_chain_bottleneck, (int, float)) and supply_chain_bottleneck >= 6:
+        competitor_attack_vectors.append("若要正面进攻，优先攻击产能、认证和关键供应链节点，而不是只拼销售。")
+    if peer_names:
+        competitor_attack_vectors.append(f"重点比较并争夺 {peer_names[0]} 等可替代客户/场景。")
+    defense_signals.extend([
+        f"{company} 已经有公开业务定位和基本财务数据，可不是空壳叙事。",
+        f"当前毛利率/增长/现金流数据至少能看出利润池线索。" if any(isinstance(v, (int, float)) for v in [gross_margin, revenue_growth, free_cashflow]) else "公开财务数据尚不足以判断利润池质量。",
+    ])
+    if moat_summary:
+        defense_signals.append(f"现有护城河摘要指向：{moat_summary}")
+    if supply_chain_position:
+        defense_signals.append(f"产业链位置显示：{supply_chain_position}")
+    if isinstance(free_cashflow, (int, float)):
+        defense_signals.append("自由现金流为正" if free_cashflow > 0 else "自由现金流仍承压")
+    if isinstance(moat_overall_score, (int, float)):
+        defense_signals.append(f"护城河综合评分约 {moat_overall_score:.1f}/10")
+    unknowns.extend([
+        "客户集中度是否足够分散",
+        "真实切换成本是否高到足以阻止价格战",
+        "是否存在监管/牌照/认证门槛",
+        "是否存在未披露的供应链卡位或产能锁定",
+    ])
+
+    structure_observations = [
+        f"利润池要先看 {business_model} 的价值分配，而不是只看行业名字。",
+        "竞争强度必须结合产品同质化、客户议价权和渠道结构判断。",
+    ]
+    if supply_chain_position:
+        structure_observations.append(f"产业链位置：{supply_chain_position}")
+    if isinstance(supply_chain_bottleneck, (int, float)):
+        structure_observations.append(f"瓶颈强度：{supply_chain_bottleneck:.0f}/10（{supply_chain_level or '未细分'}）")
+    if peer_names:
+        structure_observations.append(f"同业比较样本：{', '.join(peer_names[:5])}")
+
+    durability_signals = [
+        f"业务模式暂归类为 {business_model}，若该分类成立，长期护城河更可能来自规模/流程/渠道/平台而非一次性故事。",
+    ]
+    if isinstance(moat_overall_score, (int, float)):
+        durability_signals.append(f"现有 moat 综合评分约 {moat_overall_score:.1f}/10。")
+    if isinstance(gross_margin, (int, float)):
+        durability_signals.append(f"毛利率约 {_format_metric(gross_margin, '%', 1)}，可观察是否稳定。")
+    if isinstance(free_cashflow, (int, float)):
+        durability_signals.append("自由现金流为正，长期复利才有现金底座。" if free_cashflow > 0 else "自由现金流尚未稳定，长期壁垒需要更多验证。")
+    if supply_chain_position:
+        durability_signals.append(f"供应链位置偏向：{supply_chain_position}")
+
+    fragility_signals = []
+    if isinstance(pe_forward, (int, float)) and pe_forward >= 35:
+        fragility_signals.append(f"Forward PE {pe_forward:.1f}x 偏高，市场已经提前定价。")
+    if isinstance(ps, (int, float)) and ps >= 10:
+        fragility_signals.append(f"PS {ps:.1f}x 偏高，估值对叙事依赖强。")
+    if isinstance(free_cashflow, (int, float)) and free_cashflow <= 0:
+        fragility_signals.append("自由现金流尚未转正，投入未必已转成壁垒。")
+    if isinstance(operating_margin, (int, float)) and operating_margin < 0.1:
+        fragility_signals.append("经营利润率不高，说明竞争压力或成本结构仍偏脆弱。")
+    if len(peer_names) >= 3:
+        fragility_signals.append("同业样本较多，说明复制/替代风险不低。")
+    if isinstance(supply_chain_bottleneck, (int, float)) and supply_chain_bottleneck < 5:
+        fragility_signals.append("供应链瓶颈分不高，卡位优势可能偏阶段性。")
+    # 同业相对估值：若同行市盈率可得且显著低于目标公司，提示高估风险
+    if peer_relative_strength and isinstance(pe_forward, (int, float)) and pe_forward > 0:
+        peer_pe_vals = _peer_metric_values(peers, "pe_forward")
+        if peer_pe_vals and len(peer_pe_vals) >= 2:
+            peer_pe_median = float(np.median(peer_pe_vals))
+            if peer_pe_median > 0 and pe_forward > peer_pe_median * 1.3:
+                fragility_signals.append(
+                    f"Forward PE {pe_forward:.1f}x 显著高于同行中位数约 {peer_pe_median:.1f}x，相对估值偏高。"
+                )
+    # 周期性公司的脆弱性提示
+    if cyclical.get("is_cyclical"):
+        fragility_signals.append("处于周期性行业，当前利润率/估值可能反映周期位置而非稳态。")
+
+    market_fear = "市场担心估值先于壁垒兑现。"
+    if fragility_signals:
+        market_fear = fragility_signals[0]
+
+    if isinstance(moat_overall_score, (int, float)) and moat_overall_score >= 7 and (isinstance(free_cashflow, (int, float)) and free_cashflow > 0) and (not isinstance(ps, (int, float)) or ps < 12):
+        classification = "正在把投入转化为长期壁垒的公司"
+        rationale = "护城河、现金流和利润率至少有两项同时指向可持续性。"
+    elif isinstance(pe_forward, (int, float)) and pe_forward >= 35 and (isinstance(free_cashflow, (int, float)) and free_cashflow <= 0 or (isinstance(moat_overall_score, (int, float)) and moat_overall_score < 6)):
+        classification = "短期被高估的叙事"
+        rationale = "估值已经很高，但壁垒或现金流还没有同步验证。"
+    else:
+        classification = "需要进一步验证"
+        rationale = "公开数据还不足以把叙事和壁垒彻底分开。"
+
+    conclusion = {
+        "one_line_business": f"{company} 的真正生意是 {business_model}，而不是简单的行业标签。",
+        "one_line_moat": f"最核心的护城河目前更像是 {moat_summary or (', '.join(moat_dims[:3]) if moat_dims else '尚未完全验证的结构性优势')}。",
+        "one_line_hardest_to_copy": f"竞争对手最难复制的地方是 {supply_chain_position or ('规模化后的客户关系和执行节奏' if business_model else '尚未充分验证')}。",
+        "one_line_market_fear": market_fear,
+        "one_line_verification": assumptions_to_verify[0]["hypothesis"],
+        "classification": classification,
+        "rationale": rationale,
+    }
+    if cyclical.get("is_cyclical"):
+        conclusion["cyclical_caveat"] = cyclical["caveat"]
+
+    prompt = MOAT_STRESS_TEST_PROMPT_TEMPLATE.format(company=company, industry=industry)
+
+    return {
+        "version": "1.0",
+        "method": "deterministic_template",
+        "prompt": prompt,
+        "subject": {
+            "company": company,
+            "code": code,
+            "sector": sector,
+            "industry": industry,
+            "business_model": business_model,
+            "peer_count": len(peer_names),
+        },
+        "confirmed_facts": confirmed_facts,
+        "reasonable_inferences": reasonable_inferences,
+        "assumptions_to_verify": assumptions_to_verify,
+        "peer_relative_strength": peer_relative_strength,
+        "attack_budget_tiers": attack_budget_tiers,
+        "perspectives": {
+            "founder_competitor": {
+                "prompt_role": "创业者/竞争对手",
+                "attack_vectors": competitor_attack_vectors,
+                "defense_signals": defense_signals,
+                "unknowns": unknowns,
+            },
+            "industry_researcher": {
+                "prompt_role": "产业研究员",
+                "structure_observations": structure_observations,
+                "profit_pool_hypotheses": [
+                    "真正的利润池通常在瓶颈、标准、渠道控制、产能和客户认证更强的一侧。",
+                    "如果毛利率高且现金流稳定，利润池更可能来自定价权或规模效应。",
+                ],
+                "unknowns": unknowns,
+            },
+            "long_term_investor": {
+                "prompt_role": "长期投资者",
+                "durability_signals": durability_signals,
+                "fragility_signals": fragility_signals,
+                "unknowns": unknowns,
+                "conclusion": classification,
+            },
+        },
+        "conclusion": conclusion,
+        "metadata": {
+            "business_summary": business_summary,
+            "moat_overall_score": moat_overall_score,
+            "moat_summary": moat_summary,
+            "supply_chain_topic": supply_chain_topic,
+            "supply_chain_position": supply_chain_position,
+            "supply_chain_bottleneck_score": supply_chain_bottleneck,
+        },
+    }
 
 
 class FundamentalAnalyzer(BaseAnalyzer):

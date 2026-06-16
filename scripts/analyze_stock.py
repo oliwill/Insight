@@ -148,6 +148,13 @@ def main():
         if 'business' in fund_result.details:
             market_data['fundamentals']['moat'] = fund_result.details['business'].get('moat')
             market_data['fundamentals']['moat_indicators'] = fund_result.details['business'].get('moat_indicators', [])
+
+        from analyzer.fundamental import build_moat_stress_test
+        market_data['fundamentals']['moat_stress_test'] = build_moat_stress_test(
+            market_data.get('stock_info', {}),
+            market_data.get('fundamentals', {}) or {},
+            market_data.get('peers', []) or [],
+        )
     except Exception as e:
         print(f"护城河分析失败（跳过）: {e}")
 

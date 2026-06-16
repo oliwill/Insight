@@ -26,6 +26,7 @@ Core distinction:
 |---|---|---|
 | Evidence | Convert wiki, Materials and Inbox snippets into typed claims | `## 证据表` |
 | Supply-chain position | Deterministic Serenity-style bottleneck context inside fundamentals | `fundamentals.supply_chain` + report `### 产业链位置` |
+| Moat stress test | Deterministic narrative pressure test for new-entrant / industry / long-term investor views | `fundamentals.moat_stress_test` + report `### 护城河压力测试` |
 | Research Score | Five-dimension company/thesis quality score | `## 五维打分` |
 | Timing State | Entry quality state machine independent from research quality | `Ready / Wait / Watch / Avoid` |
 | Backtest | Verify historical timeline signals after a holding window | `## 预测验证` + `output/review_*` |

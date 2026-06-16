@@ -190,6 +190,7 @@ Thresholds: ≥75 高信心 / 60–75 标准建仓候选 / 45–60 观察 / <45 
 - It uses deterministic mappings, `data/serenity` knowledge, and optional local cache files; Python code must not call external LLM APIs for this enrichment.
 - `generate_analysis()` exposes the result at both `market_data["supply_chain"]` and `market_data["fundamentals"]["supply_chain"]`.
 - `ResearchScoreEngine` uses the supply-chain data only as additive evidence for 行业/TAM, 护城河, and 增长质量; missing `supply_chain` must preserve the original score behavior.
+- 公司基本面分析时可增加独立的护城河压力测试（新进入者 / 产业研究员 / 长期投资者三视角），但它只是叙事与验证层，不得直接替换 moat 评分或 Timing State。
 - `ReportGenerator` renders the block as `### 产业链位置` inside `## 三、基本面与估值`; do not create a separate top-level Obsidian section for it.
 - Supply-chain data must not mask missing core financial fundamentals; data-gap disclosure should still flag missing PE/PB/PS/margins/growth/cash-flow data.
 

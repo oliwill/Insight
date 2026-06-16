@@ -49,6 +49,17 @@ Use this template for normal analysis. Keep the top section compact so a user ca
 | Base | {x}% | {assumptions} | {value} |
 | Bear | {x}% | {assumptions} | {value} |
 
+## Moat Stress Test
+
+- **Business boundary:** {what the company actually sells and how it makes money}
+- **Confirmed facts:** {fact list}
+- **Reasonable inferences:** {inference list}
+- **Assumptions to verify:** {verification list}
+- **Founder / competitor view:** {attack vectors and defenses}
+- **Industry researcher view:** {profit pool and bottleneck observations}
+- **Long-term investor view:** {durability, fragility, and conclusion}
+- **Bottom line:** {is this a durable wall or an overextended narrative?}
+
 ## Risks and Open Questions
 
 - **Top risk:** {risk and quantified impact if possible}

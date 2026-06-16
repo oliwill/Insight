@@ -47,6 +47,7 @@ A great company can be a poor entry. A strong chart can still be a weak thesis. 
    - Use the five-dimension Research Score in `references/scoring-framework.md`.
    - Report score as 0-100 and include confidence.
    - Explain the top 2 positive drivers and top 2 weaknesses.
+   - Add a separate moat stress test: first define the business boundary, then analyze a new entrant attack path, industry profit pool, and long-term durability.
 
 5. **Assess Timing State**
    - Use `Ready`, `Wait`, `Watch`, or `Avoid` from `references/timing-framework.md`.

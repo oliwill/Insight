@@ -363,6 +363,19 @@ def generate_analysis(code: str) -> Dict[str, Any]:
     except Exception as e:
         output['peers_error'] = f"Unexpected: {str(e)}"
 
+    # ===== Step 3a: 护城河压力测试 =====
+    try:
+        from analyzer.fundamental import build_moat_stress_test
+
+        if isinstance(output.get('fundamentals'), dict):
+            output['fundamentals']['moat_stress_test'] = build_moat_stress_test(
+                output.get('stock_info', {}),
+                output.get('fundamentals', {}) or {},
+                output.get('peers', []) or [],
+            )
+    except Exception as e:
+        output['moat_stress_test_error'] = f"Unexpected: {str(e)}"
+
     # ===== Step 4: ETF 检测 (etf-premium) =====
     try:
         from data.etf import ETFAnalyzer

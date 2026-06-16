@@ -133,6 +133,8 @@ class ReportGenerator:
         max_pain_display = f"${max_pain:.2f}" if max_pain is not None else "N/A"
 
         supply_chain = market_data.get('supply_chain', {}) or fundamentals.get('supply_chain', {})
+        moat_stress_test = market_data.get('moat_stress_test') or fundamentals.get('moat_stress_test') or {}
+        moat_stress_md = cls._format_moat_stress_test(moat_stress_test)
         summary_lines = [
             "## 一、本次分析总结",
             "",
@@ -212,6 +214,8 @@ class ReportGenerator:
 {supply_chain_md + chr(10) + chr(10) if supply_chain_md else ''}### 护城河分析
 
 {cls._format_moat_analysis(fundamentals)}
+
+{moat_stress_md}
 
 ### 估值水平
 | 指标 | 数值 | 评价 |
@@ -1086,6 +1090,157 @@ class ReportGenerator:
             return generator.format_grid(levels)
         except Exception as e:
             return f"交易网格生成失败: {e}"
+
+    @classmethod
+    def _format_moat_stress_test(cls, stress_test: Dict) -> str:
+        """格式化护城河压力测试。"""
+        if not isinstance(stress_test, dict) or not stress_test:
+            return ""
+
+        def _render_list(items, limit=4, key="claim"):
+            lines = []
+            for item in list(items or [])[:limit]:
+                if isinstance(item, dict):
+                    text = item.get(key) or item.get("claim") or item.get("hypothesis") or item.get("basis") or item.get("prompt_role") or ""
+                    if key == "claim" and item.get("source"):
+                        text = f"{text}（{item.get('source')}）" if text else str(item.get("source"))
+                else:
+                    text = str(item)
+                text = text.strip()
+                if text:
+                    lines.append(f"- {text}")
+            return lines
+
+        subject = stress_test.get("subject") or {}
+        perspectives = stress_test.get("perspectives") or {}
+        conclusion = stress_test.get("conclusion") or {}
+        metadata = stress_test.get("metadata") or {}
+
+        lines = ["### 护城河压力测试", ""]
+
+        business_model = subject.get("business_model") or "-"
+        company = subject.get("company") or metadata.get("company") or "-"
+        sector = subject.get("sector") or "-"
+        industry = subject.get("industry") or "-"
+        peer_count = subject.get("peer_count")
+
+        lines.append(f"- **业务边界**：{company} 主要按 {business_model} 理解，处于 {sector} / {industry} 语境。")
+        if peer_count is not None:
+            lines.append(f"- **同行样本**：{peer_count} 家")
+
+        if conclusion:
+            business = conclusion.get("one_line_business")
+            moat = conclusion.get("one_line_moat")
+            hardest = conclusion.get("one_line_hardest_to_copy")
+            fear = conclusion.get("one_line_market_fear")
+            verify = conclusion.get("one_line_verification")
+            verdict = conclusion.get("classification")
+            rationale = conclusion.get("rationale")
+            if business:
+                lines.append(f"- **真正的生意**：{business}")
+            if moat:
+                lines.append(f"- **核心护城河**：{moat}")
+            if hardest:
+                lines.append(f"- **最难复制**：{hardest}")
+            if fear:
+                lines.append(f"- **市场担心**：{fear}")
+            if verify:
+                lines.append(f"- **未来最值得验证**：{verify}")
+            if verdict:
+                lines.append(f"- **最终判断**：{verdict}" + (f"（{rationale}）" if rationale else ""))
+            cyclical_caveat = conclusion.get("cyclical_caveat")
+            if cyclical_caveat:
+                lines.append(f"- **周期性提示**：{cyclical_caveat}")
+
+        confirmed_facts = stress_test.get("confirmed_facts") or []
+        if confirmed_facts:
+            lines.extend(["", "#### 已确认事实"])
+            lines.extend(_render_list(confirmed_facts, limit=5, key="claim"))
+
+        # 同行相对强弱（仅当可比字段存在时渲染）
+        peer_strength = stress_test.get("peer_relative_strength") or {}
+        if peer_strength.get("available") and peer_strength.get("comparisons"):
+            lines.extend(["", "#### 同行相对强弱"])
+            if peer_strength.get("summary"):
+                lines.append(f"- {peer_strength['summary']}")
+            label_map = {"market_cap": "市值", "gross_margin": "毛利率", "revenue_growth": "营收增速", "roe": "ROE"}
+            for comp in peer_strength.get("comparisons", [])[:4]:
+                metric_label = label_map.get(comp.get("metric"), comp.get("metric", ""))
+                direction = "高于" if comp.get("direction") == "above" else "低于"
+                if comp.get("metric") == "market_cap":
+                    lines.append(f"- {metric_label}{direction}同行中位数，约 {comp.get('ratio_vs_peer_median')}x")
+                else:
+                    lines.append(
+                        f"- {metric_label}{direction}同行中位数约 {abs(comp.get('diff_percentage_points', 0)):.1f} 个百分点"
+                    )
+
+        # 三档预算攻击模拟（仅当市值可得时渲染）
+        budget_tiers = stress_test.get("attack_budget_tiers") or {}
+        if budget_tiers.get("available") and budget_tiers.get("tiers"):
+            lines.extend(["", "#### 竞争对手攻击模拟（三档预算）"])
+            tier_labels = {"low": "低预算", "mid": "中预算", "high": "高预算"}
+            for tier_key in ("low", "mid", "high"):
+                tier = (budget_tiers.get("tiers") or {}).get(tier_key) or {}
+                if not tier:
+                    continue
+                lines.append(f"- **{tier_labels.get(tier_key, tier_key)}**：约 ${tier.get('budget', 0) / 1e6:.0f}M")
+                lines.append(f"  - 首年：{tier.get('first_year_focus', '')}")
+                lines.append(f"  - 三年可达：{tier.get('realistic_3_year_reach', '')}")
+                lines.append(f"  - 建议姿态：{tier.get('recommended_angle', '')}")
+
+        reasonable_inferences = stress_test.get("reasonable_inferences") or []
+        if reasonable_inferences:
+            lines.extend(["", "#### 合理推断"])
+            lines.extend(_render_list(reasonable_inferences, limit=5, key="claim"))
+
+        assumptions = stress_test.get("assumptions_to_verify") or []
+        if assumptions:
+            lines.extend(["", "#### 需要验证的假设"])
+            # 按优先级排序：high → medium → low
+            priority_order = {"high": 0, "medium": 1, "low": 2}
+            sorted_assumptions = sorted(
+                (a for a in assumptions if isinstance(a, dict)),
+                key=lambda a: priority_order.get(a.get("priority"), 1),
+            )
+            priority_label = {"high": "高", "medium": "中", "low": "低"}
+            for item in sorted_assumptions[:5]:
+                hypothesis = item.get("hypothesis") or item.get("claim") or ""
+                verification = item.get("verification_path") or ""
+                risk = item.get("risk_if_false") or ""
+                priority = item.get("priority")
+                text = hypothesis
+                if priority in priority_label:
+                    text = f"[{priority_label[priority]}] {text}"
+                if verification:
+                    text += f"｜验证路径：{verification}"
+                if risk:
+                    text += f"｜若为假：{risk}"
+                if text:
+                    lines.append(f"- {text}")
+
+        for title, key in [
+            ("创业者/竞争对手视角", "founder_competitor"),
+            ("产业研究员视角", "industry_researcher"),
+            ("长期投资者视角", "long_term_investor"),
+        ]:
+            section = perspectives.get(key) or {}
+            if not section:
+                continue
+            lines.extend(["", f"#### {title}"])
+            if key == "founder_competitor":
+                lines.extend(_render_list(section.get("attack_vectors"), limit=4))
+                lines.extend(_render_list(section.get("defense_signals"), limit=4))
+            elif key == "industry_researcher":
+                lines.extend(_render_list(section.get("structure_observations"), limit=4))
+                lines.extend(_render_list(section.get("profit_pool_hypotheses"), limit=3, key="claim"))
+            else:
+                lines.extend(_render_list(section.get("durability_signals"), limit=4))
+                lines.extend(_render_list(section.get("fragility_signals"), limit=4))
+            lines.extend(_render_list(section.get("unknowns"), limit=3))
+            if section.get("conclusion"):
+                lines.append(f"- **视角结论**：{section.get('conclusion')}")
+
+        return "\n".join(line for line in lines if line is not None).strip()
 
     @classmethod
     def _format_moat_analysis(cls, fundamentals: Dict) -> str:
