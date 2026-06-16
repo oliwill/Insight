@@ -865,11 +865,7 @@ tags: {tags}
             if not timeline or timeline.startswith("（暂无"):
                 continue
 
-            scores = []
-            for line in timeline.split("\n"):
-                m = re.search(r"评分:\s*([\d.]+)", line)
-                if m:
-                    scores.append(float(m.group(1)))
+            scores = [record["score"] for record in self.get_analysis_history(stock_code=stock_code, limit=1000)]
 
             if scores:
                 all_scores.extend(scores)

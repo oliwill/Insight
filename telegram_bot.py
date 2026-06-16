@@ -24,9 +24,10 @@ import sys
 import re
 import asyncio
 import subprocess
+import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 
 # 添加项目根目录到路径
 PROJECT_DIR = Path(__file__).parent
@@ -35,14 +36,17 @@ sys.path.insert(0, str(PROJECT_DIR))
 from dotenv import load_dotenv
 load_dotenv()
 
-from telegram import Update, Bot
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+try:
+    from telegram import Update, Bot
+    from telegram.ext import (
+        Application,
+        CommandHandler,
+        MessageHandler,
+        ContextTypes,
+        filters,
+    )
+except ImportError:
+    Update = Bot = Application = CommandHandler = MessageHandler = ContextTypes = filters = None
 
 # 导入项目模块
 from inbox_scanner import (
@@ -68,10 +72,11 @@ LOG_FILE = Path(OBSIDIAN_TASKS_DIR) / "telegram_log.md" if OBSIDIAN_TASKS_DIR el
 # ========== 股票代码提取正则 ==========
 # 匹配 $AAPL, AAPL, AAPL.US, 00700.HK 等格式
 TICKER_PATTERN = re.compile(
-    r'\$([A-Z]{1,5})|'          # $AAPL
-    r'\b([A-Z]{2,5})\.US\b|'     # AAPL.US
-    r'\b([0-9]{5})\.HK\b|'       # 00700.HK
-    r'\b(SH|SZ|BJ)([0-9]{6})\b', # SH603906
+    r'\$([A-Z]{1,5})\b|'              # $AAPL
+    r'\b([A-Z]{1,5})\b|'              # AAPL
+    r'\b([A-Z]{1,5}\.US)\b|'          # AAPL.US
+    r'\b([0-9]{5}\.HK)\b|'            # 00700.HK
+    r'\b((?:SH|SZ|BJ)[0-9]{6})\b',    # SH603906
     re.IGNORECASE
 )
 
@@ -189,7 +194,7 @@ def format_analysis_summary(context: str, ticker: str) -> str:
 # ========== 命令处理函数 ==========
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Any, context: Any):
     """启动命令"""
     if not is_authorized(update.effective_user.id):
         await update.message.reply_text("❌ 你没有权限使用此 bot")
@@ -210,7 +215,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_interaction("start", update.message.text, welcome)
 
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def help_command(update: Any, context: Any):
     """帮助命令"""
     help_text = (
         "📖 命令说明\n\n"
@@ -233,7 +238,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_interaction("help", update.message.text, help_text)
 
 
-async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def note_command(update: Any, context: Any):
     """写入笔记命令"""
     if not is_authorized(update.effective_user.id):
         await update.message.reply_text("❌ 你没有权限使用此 bot")
@@ -280,7 +285,7 @@ async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_interaction("note", content, error_msg)
 
 
-async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def get_command(update: Any, context: Any):
     """读取分析命令"""
     if not is_authorized(update.effective_user.id):
         await update.message.reply_text("❌ 你没有权限使用此 bot")
@@ -309,7 +314,7 @@ async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_interaction("get", ticker, error_msg)
 
 
-async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def scan_command(update: Any, context: Any):
     """触发扫描命令"""
     if not is_authorized(update.effective_user.id):
         await update.message.reply_text("❌ 你没有权限使用此 bot")
@@ -344,7 +349,7 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_interaction("scan", "", error_msg)
 
 
-async def inbox_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def inbox_command(update: Any, context: Any):
     """待处理列表命令"""
     if not is_authorized(update.effective_user.id):
         await update.message.reply_text("❌ 你没有权限使用此 bot")
@@ -378,7 +383,7 @@ async def inbox_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_interaction("inbox", "", error_msg)
 
 
-async def task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def task_command(update: Any, context: Any):
     """待办任务命令"""
     if not is_authorized(update.effective_user.id):
         await update.message.reply_text("❌ 你没有权限使用此 bot")
@@ -428,7 +433,7 @@ async def task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_interaction("task", "", error_msg)
 
 
-async def handle_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_forward(update: Any, context: Any):
     """处理转发推文"""
     if not is_authorized(update.effective_user.id):
         return
@@ -495,9 +500,9 @@ async def handle_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     """启动 bot"""
     if not TELEGRAM_BOT_TOKEN:
-        print("❌ 错误: 未设置 TELEGRAM_BOT_TOKEN")
-        print("请在 .env 文件中配置: TELEGRAM_BOT_TOKEN=your_token")
-        print("获取方式: 在 Telegram 中找 @BotFather，发送 /newbot")
+        print("ERROR: TELEGRAM_BOT_TOKEN is not set")
+        print("Configure TELEGRAM_BOT_TOKEN=your_token in .env")
+        print("Get one from @BotFather with /newbot")
         sys.exit(1)
 
     # 创建应用
@@ -522,9 +527,34 @@ def main():
     else:
         print("⚠️  警告: 未设置 TELEGRAM_USER_ID，所有人都可以使用")
 
-    print("📡 使用长轮询模式...")
+    print("Polling mode enabled...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
-if __name__ == "__main__":
+def main_cli():
+    parser = argparse.ArgumentParser(description="Telegram Bot - Trader-Obsidian")
+    parser.add_argument("--polling", action="store_true", help="使用长轮询模式（默认）")
+    parser.add_argument("--webhook", action="store_true", help="使用 webhook 模式（需配置服务器）")
+    args = parser.parse_args()
+
+    if Application is None:
+        print("ERROR: missing python-telegram-bot dependency")
+        print("Install with: pip install python-telegram-bot")
+        return 1
+
+    if args.webhook:
+        print("Webhook mode is not implemented yet.")
+        return 1
+
+    if not TELEGRAM_BOT_TOKEN:
+        print("ERROR: TELEGRAM_BOT_TOKEN is not set")
+        print("Configure TELEGRAM_BOT_TOKEN=your_token in .env")
+        print("Get one from @BotFather with /newbot")
+        return 1
+
     main()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main_cli())

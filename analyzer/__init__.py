@@ -1,13 +1,3 @@
-# Analyzer 包
-from .base import BaseAnalyzer, AnalysisResult
-from .fundamental import FundamentalAnalyzer
-from .wyckoff import WyckoffAnalyzer, WyckoffStructure, MarketPhase, WyckoffEvent
-from .comprehensive import ComprehensiveAnalyzer
-from .models import get_analyzer, list_analyzers
-from .research_score import ResearchScoreEngine, ResearchScore, ResearchDimensionScore
-from .timing_engine import TimingEngine, TimingState
-from .report_quality import ReportQualityEvaluator, ReportQualityResult, ReportQualityIssue, evaluate_report_quality
-
 __all__ = [
     "BaseAnalyzer",
     "AnalysisResult",
@@ -24,8 +14,38 @@ __all__ = [
     "ResearchDimensionScore",
     "TimingEngine",
     "TimingState",
-    "ReportQualityEvaluator",
-    "ReportQualityResult",
-    "ReportQualityIssue",
-    "evaluate_report_quality",
 ]
+
+
+def __getattr__(name):
+    if name in {"BaseAnalyzer", "AnalysisResult"}:
+        from .base import BaseAnalyzer, AnalysisResult
+        return {"BaseAnalyzer": BaseAnalyzer, "AnalysisResult": AnalysisResult}[name]
+    if name == "FundamentalAnalyzer":
+        from .fundamental import FundamentalAnalyzer
+        return FundamentalAnalyzer
+    if name in {"WyckoffAnalyzer", "WyckoffStructure", "MarketPhase", "WyckoffEvent"}:
+        from .wyckoff import WyckoffAnalyzer, WyckoffStructure, MarketPhase, WyckoffEvent
+        return {
+            "WyckoffAnalyzer": WyckoffAnalyzer,
+            "WyckoffStructure": WyckoffStructure,
+            "MarketPhase": MarketPhase,
+            "WyckoffEvent": WyckoffEvent,
+        }[name]
+    if name == "ComprehensiveAnalyzer":
+        from .comprehensive import ComprehensiveAnalyzer
+        return ComprehensiveAnalyzer
+    if name in {"get_analyzer", "list_analyzers"}:
+        from .models import get_analyzer, list_analyzers
+        return {"get_analyzer": get_analyzer, "list_analyzers": list_analyzers}[name]
+    if name in {"ResearchScoreEngine", "ResearchScore", "ResearchDimensionScore"}:
+        from .research_score import ResearchScoreEngine, ResearchScore, ResearchDimensionScore
+        return {
+            "ResearchScoreEngine": ResearchScoreEngine,
+            "ResearchScore": ResearchScore,
+            "ResearchDimensionScore": ResearchDimensionScore,
+        }[name]
+    if name in {"TimingEngine", "TimingState"}:
+        from .timing_engine import TimingEngine, TimingState
+        return {"TimingEngine": TimingEngine, "TimingState": TimingState}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

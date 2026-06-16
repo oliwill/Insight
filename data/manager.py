@@ -14,6 +14,16 @@ from contextlib import contextmanager
 import yfinance as yf
 from loguru import logger
 
+# Load .env on import so DataManager picks up credentials without an explicit
+# load_dotenv() call in the caller (mirrors the master CLI contract).
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    # python-dotenv is optional; callers without it must set env vars themselves.
+    pass
+
 
 @contextmanager
 def suppress_stdout():

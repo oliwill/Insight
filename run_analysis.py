@@ -282,7 +282,7 @@ def write_analysis_to_obsidian(
     mm.append_to_section(stock_code, "研究笔记", entry)
 
     # 更新 index
-    mm.update_index(stock_code, stock_name, score)
+    mm.update_index(stock_code, stock_name, display_score)
 
     print(f"Analysis written to Obsidian: {stock_code}")
 

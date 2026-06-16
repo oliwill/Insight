@@ -129,7 +129,9 @@ class BacktestRunner:
                 explicit_text = f"BUY {core_view}"
             signals = self._extract_signals_from_text(explicit_text)
             if not signals:
-                continue
+                # Legacy timeline entries without an explicit action word default to HOLD,
+                # so they still backtest as a passive hold over the window.
+                signals = ["HOLD"]
 
             result = AnalysisResult(
                 score=score,
