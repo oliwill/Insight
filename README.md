@@ -11,6 +11,8 @@ Inbox / Materials / stock wiki
     ↓
 data.analysis_pipeline.generate_analysis()
     ↓
+StockChainAnalyzer → fundamentals.supply_chain
+    ↓
 EvidenceExtractor → ResearchScoreEngine → TimingEngine
     ↓
 ReportGenerator + MemoryManager
@@ -23,6 +25,7 @@ Core distinction:
 | Layer | Purpose | Output |
 |---|---|---|
 | Evidence | Convert wiki, Materials and Inbox snippets into typed claims | `## 证据表` |
+| Supply-chain position | Deterministic Serenity-style bottleneck context inside fundamentals | `fundamentals.supply_chain` + report `### 产业链位置` |
 | Research Score | Five-dimension company/thesis quality score | `## 五维打分` |
 | Timing State | Entry quality state machine independent from research quality | `Ready / Wait / Watch / Avoid` |
 | Backtest | Verify historical timeline signals after a holding window | `## 预测验证` + `output/review_*` |
@@ -58,7 +61,7 @@ This version updates the skills layer so the research workflow can be reused out
 | Skill set | Path | Purpose |
 |---|---|---|
 | Public cockpit skill | `skills/stock-research-cockpit/` | Portable AI workflow for evidence-backed stock research |
-| Finance companion skills | `.agents/skills/` | Optional valuation, estimates, sentiment, source-reader, and market-analysis helpers |
+| Finance companion plugin | `.agents/skills/` | Agent-layer companion for valuation, estimates, sentiment, source-readers, market analysis, startup tools, UI tools, and skill authoring |
 | Skill lockfile | `skills-lock.json` | Records the imported finance-skill sources and hashes |
 
 The public skill is the recommended starting point for users who only want the research workflow:
@@ -71,7 +74,7 @@ The skill packages the core workflow as AI instructions:
 
 - Skill-only mode for any AI agent that can read the skill folder.
 - Local companion mode when this repo, CLI, or MCP server is available.
-- External finance-skills mode for richer valuation, sentiment, source-reader, and market-structure coverage.
+- External finance-skills mode for richer valuation, sentiment, source-reader, and market-structure coverage through an agent-layer companion.
 
 It preserves the core product boundary: evidence-backed research, five-dimension Research Score, independent Timing State, data-gap disclosure, and no trade execution.
 
@@ -113,7 +116,25 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\.agents\skills" | Out-Null
 Copy-Item -Recurse -Force ".\skills\stock-research-cockpit" "$env:USERPROFILE\.agents\skills\stock-research-cockpit"
 ```
 
-To enable the optional finance companion skills, copy the vendored skill bundle as well:
+To enable the optional finance companion plugin, install the upstream bundle and reload your AI agent:
+
+```bash
+npx plugins add himself65/finance-skills
+```
+
+The installed bundle has six groups: market-analysis, data-providers, social-readers, startup-tools, ui-tools, and skill-creator. Use it as an agent-layer companion, not as a Python pipeline dependency.
+
+Policy taxonomy:
+
+| Policy | Meaning | Examples |
+|---|---|---|
+| Baseline | Expected in comprehensive public-equity analysis when available and relevant | `funda-data`, `company-valuation`, `estimate-analysis`, `stock-correlation`, `finance-sentiment`, `sepa-strategy` |
+| Conditional | Invoke only when asset type, event, liquidity, data gap, or source requirement triggers it | `yfinance-data`, `stock-liquidity`, `earnings-preview`, `earnings-recap`, `options-payoff`, `etf-premium`, `tradingview-reader`, `hormuz-strait`, `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`, `opencli-reader` |
+| Explicit-only | Use only when the user asks for that workflow | `startup-analysis`, `generative-ui`, `skill-creator`, `saas-valuation-compression` |
+
+Keep social/source readers read-only. Do not post, write to external services, or execute trades through plugin skills.
+
+If you maintain a manual `~/.agents/skills` directory, the vendored copy can also be copied directly:
 
 ```bash
 mkdir -p ~/.agents/skills
@@ -128,6 +149,10 @@ Copy-Item -Recurse -Force ".\.agents\skills\*" "$env:USERPROFILE\.agents\skills\
 ```
 
 After copying skills into a local skills directory, restart or reload the AI agent so it can index the new folders.
+
+## Website
+
+A zero-dependency website prototype lives at `website/index.html`. Open it directly in a browser to try the interactive Stock Research Cockpit, inspect skill install commands, and preview the research workflow before connecting a local companion service.
 
 ## Commands
 
@@ -201,7 +226,7 @@ Each stock wiki is initialized with these core sections:
 | `流动性分析` | `data.liquidity.LiquidityAnalyzer` |
 | `期权市场` | `data.options.OptionsAnalyzer` |
 | `社交情绪` | `data.search.StockSearchEngine` + `SentimentAnalyzer` |
-| `研究笔记` | `ReportGenerator` full Markdown report |
+| `研究笔记` | `ReportGenerator` full Markdown report, including the fundamental `### 产业链位置` block when supply-chain data is available |
 | `交叉引用` | `data.correlation.CorrelationAnalyzer` |
 | `资料索引` | `MemoryManager.save_material()` |
 
@@ -211,9 +236,9 @@ Each stock wiki is initialized with these core sections:
 
 | Dimension | Weight | Main inputs |
 |---|---:|---|
-| 行业/TAM | 20% | sector, peers, search/social signals |
-| 护城河 | 20% | moat analysis, margins, peer context |
-| 增长质量 | 20% | revenue growth, earnings growth, margins, FCF |
+| 行业/TAM | 20% | sector, peers, search/social signals, Serenity supply-chain bottleneck exposure |
+| 护城河 | 20% | moat analysis, margins, peer context, supply-chain layer scarcity/certification barriers |
+| 增长质量 | 20% | revenue growth, earnings growth, margins, FCF, supply-chain demand pressure |
 | 估值 | 25% | P/S, PSG, forward PE, analyst target |
 | 团队/治理 | 15% | insider ownership/signal, SBC pressure |
 
@@ -237,7 +262,7 @@ Thresholds: ≥75 high-conviction / 60–75 standard candidate / 45–60 watch /
 | NewsAPI | news enrichment | `NEWSAPI_KEY` |
 | Longbridge | HK/CN quotes and K-lines | Longbridge credentials |
 | Obsidian vault | prior theses, materials, Inbox evidence | `.env` paths |
-| External finance-skills | analyst-grade data, valuation, estimates, sentiment, TradingView, and read-only social/source readers | optional Claude Code skills from `himself65/finance-skills` |
+| External finance-skills plugin | agent-layer companion for analyst-grade data, valuation, estimates, sentiment, TradingView, and read-only social/source readers | optional: `npx plugins add himself65/finance-skills` |
 
 The pipeline is fault-tolerant: failed modules return `*_error` fields, data-source attempts are exposed under `_data_sources`, and the rest of the report can still be generated.
 
@@ -245,6 +270,7 @@ The pipeline is fault-tolerant: failed modules return `*_error` fields, data-sou
 
 | Module | Purpose |
 |---|---|
+| `data.supply_chain` | per-stock Serenity-style supply-chain position and bottleneck analysis |
 | `data.analysis_pipeline` | one-call data collection and technical calculations |
 | `analyzer.research_score` | evidence-adjusted five-dimension scoring |
 | `analyzer.timing_engine` | Ready/Wait/Watch/Avoid timing state machine |

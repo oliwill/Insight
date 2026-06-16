@@ -10,6 +10,9 @@ flowchart TD
     Materials[Obsidian Materials] --> Evidence[input.evidence]
     Wiki[Stock wiki] --> Evidence
     Scanner --> Pipeline[data.analysis_pipeline]
+    Pipeline --> SupplyChain[data.supply_chain]
+    SupplyChain --> Score
+    SupplyChain --> Report
     Pipeline --> Score[analyzer.research_score]
     Evidence --> Score
     Pipeline --> Timing[analyzer.timing_engine]
@@ -34,12 +37,15 @@ flowchart TD
 | `scripts/analyze_stock.py` | one-click Cockpit analysis and Obsidian write |
 | `run_analysis.py` | data fetch, scan/dashboard commands, write helpers |
 | `data/analysis_pipeline.py` | one-call data pipeline |
+| `data.supply_chain.py` | per-stock Serenity-style supply-chain position adapter |
+| `data/serenity/` | deterministic industry-chain knowledge, bottleneck scoring, and standalone Serenity scan support |
 | `input/evidence.py` | extracts typed evidence from wiki, Materials, Inbox |
 | `analyzer/research_score.py` | five-dimension research score |
 | `analyzer/timing_engine.py` | trade-timing state machine |
 | `analyzer/report_generator.py` | final Markdown report |
 | `analyzer/report_quality.py` | report structure, data-gap, and Research/Timing separation checks |
 | `skills/stock-research-cockpit/` | reusable AI skill for public stock research cockpit workflows |
+| `himself65/finance-skills` plugin | optional Claude Code / agent-layer companion for valuation, estimates, sentiment, source readers, startup tools, UI tools, and skill authoring |
 | `memory/manager.py` | wiki/Materials/index/log persistence |
 | `backtest/runner.py` | timeline signal parsing, verification, and extended metrics |
 | `backtest/review.py` | scheduled review workflow |
@@ -56,6 +62,7 @@ flowchart TD
 | `wiki_status`, `wiki_summary` | `MemoryManager.get_stock_context()` |
 | `stock_info` | `DataManager.get_stock_info()` |
 | `fundamentals` | `DataManager.get_fundamentals()` |
+| `supply_chain` | `data.supply_chain.StockChainAnalyzer`, also copied into `fundamentals.supply_chain` |
 | `earnings` | `data.earnings.EarningsCalendar` |
 | `technicals` | local MA/RSI/MACD/KDJ/Bollinger/support calculations |
 | `wyckoff` | `analyzer.wyckoff.WyckoffAnalyzer` |
@@ -67,6 +74,30 @@ flowchart TD
 | `_data_sources` | `DataManager.get_source_status()` source-attempt diagnostics |
 
 Each stage catches local failures and emits a `*_error` key instead of aborting the entire pipeline. Data-source fallbacks are recorded under `_data_sources`.
+
+## Agent-Layer Finance Skills
+
+The `himself65/finance-skills` plugin is an optional agent-layer companion. It is not imported by Python modules and must not become a dependency of `data.analysis_pipeline` or the deterministic scoring/reporting path.
+
+Use the plugin from Claude Code or another skill-aware agent after local data is collected:
+
+```text
+run_analysis.py / analyze_stock_tool
+    ↓
+Claude Code applies finance-skills taxonomy
+    ↓
+write_analysis_to_obsidian() / write_analysis_tool
+```
+
+Policy tiers:
+
+| Tier | Skills |
+|---|---|
+| Baseline | `funda-data`, `company-valuation`, `estimate-analysis`, `stock-correlation`, `finance-sentiment`, `sepa-strategy` |
+| Conditional | `yfinance-data`, `stock-liquidity`, `earnings-preview`, `earnings-recap`, `options-payoff`, `etf-premium`, `tradingview-reader`, `hormuz-strait`, `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`, `opencli-reader` |
+| Explicit-only | `startup-analysis`, `generative-ui`, `saas-valuation-compression`, `skill-creator` |
+
+Social/source readers stay read-only. They must not post, message, write to external services, or execute trades.
 
 ## Cockpit Analysis Flow
 
@@ -83,6 +114,18 @@ Each stage catches local failures and emits a `*_error` key instead of aborting 
 9. Generate Markdown with `ReportGenerator`.
 10. Evaluate report structure with `ReportQualityEvaluator`.
 11. Persist via `write_analysis_to_obsidian()`.
+
+## Supply-Chain Enrichment
+
+`StockChainAnalyzer` adapts Serenity-style theme research to individual stock analysis:
+
+1. Resolve ticker / company / sector / industry to a Serenity topic using deterministic maps and keywords.
+2. Read optional local cache from `data/cache/supply_chain/{NORMALIZED_CODE}.json` when present.
+3. Reuse `ChainAnalyzer` and `BottleneckScorer` from `data/serenity/` to score layers.
+4. Locate the target company by cache `target_layer_name`, candidate company match, or layer key-company match before falling back to the highest bottleneck layer.
+5. Return compact `supply_chain` data for scoring and report rendering.
+
+The enrichment is additive. It must not call external LLM APIs, create a separate top-level Obsidian section, or hide missing financial fundamentals.
 
 ## Research Score
 

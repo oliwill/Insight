@@ -1,228 +1,103 @@
-# trader-obsidian 项目进度
+# Insight 项目进度追踪
 
-更新时间：2026-06-05
-维护方式：每次完成阶段性开发、修复关键问题或调整方向后更新本文件。
+> 最后更新：2026-06-16
 
-## 1. 项目定位
+## 已完成
 
-`trader-obsidian` 是一个以 Obsidian 为长期研究工作台、以 Python 和 Claude Code 为执行与推理层的股票研究系统。
+### Finance skills agent-layer 融入 (2026-06-16)
+- [x] 手动安装 `himself65/finance-skills` plugin bundle：market-analysis、data-providers、social-readers、startup-tools、ui-tools、skill-creator
+- [x] 明确 finance skills 是 Claude Code / agent-layer companion，不是 Python pipeline 依赖
+- [x] 建立 Baseline / Conditional / Explicit-only taxonomy
+- [x] 同步 `CLAUDE.md`、README、integration guide、runbook、handoff、architecture、website 文案
+- [x] 保留 source readers 只读边界：不发帖、不外部写入、不执行交易
+- [x] 验证：pytest 回归 `72 passed, 2 warnings`；`node --check website/app.js` 与 Python 编译检查需在本地命令可用时继续作为发布前检查
 
-核心目标：
+### Serenity 产业链扫描集成 (2026-06-12)
+- [x] 设计 SerenityIntegrator：将产业链分析结果映射到 Obsidian Wiki 的多个 section
+- [x] 实现综合评估更新：行业/TAM 维度自动填充
+- [x] 实现五维打分：基于瓶颈分析计算行业/TAM、护城河、增长质量三个维度
+- [x] 实现证据表：候选公司作为结构化证据条目
+- [x] 实现交叉引用：产业链相关公司自动列出
+- [x] 保留研究笔记：完整产业链分析 Markdown 追加
+- [x] 实现分析时间线：自动追加扫描记录
+- [x] 修复 MNTS 别名映射错误（MNTS 是 Momentus，非 MRAM）
+- [x] 编写完整集成测试
+- [x] 编写集成文档 SERENITY_INTEGRATION.md
+- [x] 全部 56 个测试通过
 
-- 将股票研究资料、市场数据、分析结论和复盘结果沉淀到 Obsidian Markdown 文件中。
-- 区分长期公司/投资逻辑质量与短期交易时机，避免把“好公司”和“好买点”混为一谈。
-- 通过 Inbox、Materials、Stock Wiki、Dashboard 和 Tasks 构建可持续迭代的研究闭环。
+### Serenity 基础模块 (2026-06-12 早)
+- [x] `reference.py`：LAYER_MAP 别名映射 + INDUSTRY_KNOWLEDGE 知识库（MRAM、AI 半导体、CPO、GPU、HBM）
+- [x] `chain_analyzer.py`：知识库精确匹配 → 模糊匹配 → 骨架兜底
+- [x] `bottleneck_scorer.py`：瓶颈评分 + 候选排序
+- [x] `report_builder.py`：Markdown 生成 + Obsidian 写入
+- [x] `scripts/serenity_scan.py`：CLI 入口
 
-## 2. 当前状态快照
+### 其他已完成
+- [x] 分析流水线 (`data/analysis_pipeline.py`)
+- [x] 报告生成器 (`analyzer/report_generator.py`)
+- [x] MemoryManager Wiki 系统
+- [x] 五维打分引擎 (`analyzer/research_score_engine.py`)
+- [x] 交易时机引擎 (`analyzer/timing_engine.py`)
 
-| 模块 | 当前状态 | 入口 / 参考 |
-|---|---|---|
-| 一键 Cockpit 分析 | 已实现 | `python scripts/analyze_stock.py <TICKER>` |
-| 数据采集与分析上下文 | 已实现 | `python run_analysis.py <TICKER>` |
-| Obsidian 写入 | 已实现 | `run_analysis.write_analysis_to_obsidian()` |
-| 证据提取 | 已实现 | `input.evidence.EvidenceExtractor` |
-| 五维 Research Score | 已实现 | `analyzer.research_score.ResearchScoreEngine` |
-| Timing State | 已实现 | `analyzer.timing_engine.TimingEngine` |
-| 时间线回测 | 已实现 | `backtest.runner.BacktestRunner` |
-| 回测扩展指标 | 已实现 | `backtest.core.BacktestResult` |
-| 数据源降级诊断 | 已实现 | `data.manager.DataManager.get_source_status()` |
-| 报告质量评估器 | 已实现 | `analyzer.report_quality.ReportQualityEvaluator` |
-| 可分发 AI skill | 已实现 | `skills/stock-research-cockpit` |
-| 定期复盘 | 已实现 | `scripts/run_review.py` |
-| MCP 服务 | 已实现 | `python trader_mcp.py` |
-| Telegram Bot | 已实现 | `python telegram_bot.py --polling` |
-| Inbox Watcher | 已实现 | `python inbox_watcher.py` |
-| Podwise 同步 | 已实现 | `python scripts/podwise_sync.py` |
-| Yahoo 港股代码映射测试 | 已实现 | `tests/test_yahoo_symbol.py` |
-| Obsidian section 安全写入测试 | 已实现 | `tests/test_section_write.py` |
-| 报告生成渲染回归测试 | 已实现 | `tests/test_report_generator.py` |
-| 报告质量回归测试 | 已实现 | `tests/test_report_quality.py` |
-| Stock Research Cockpit skill | 已实现 | `skills/stock-research-cockpit/evals/evals.json` |
+## 进行中
 
-## 3. 关键项目约束
+（暂无）
 
-这些约束比普通任务优先级更高：
+## 待办（按优先级）
 
-1. 股票 wiki 必须写入配置的 Obsidian vault，不要在仓库里手写分析报告副本。
-2. 股票文件名统一把 `.` 和 `/` 替换成 `_`：`AAPL.US` → `AAPL_US.md`。
-3. `Research Score` 衡量公司/ thesis 质量；`Timing State` 衡量入场时机，二者必须保持分离。
-4. Cockpit sections 每次分析可替换：`证据表`、`五维打分`、`交易时机状态`、`与上次分析相比`。
-5. 长期 sections 以追加为主：`分析时间线`、`预测验证`、`研究笔记`、`资料索引`。
-6. 数据模块失败时应返回 `*_error` 字段，不应阻断整个报告生成。
-7. 生成内容写入已有 wiki section 时，不能破坏 Obsidian 顶层结构。
+### P1 — 高优先级
+- [ ] **DollarLiquidity 宏观流动性数据接入**：已验证 `/api/regime`、`/api/series/{indicatorId}`、`/api/correlation` 三个端点，需要实现数据拉取和集成
+- [ ] **web_searcher.py 实现**：`--depth deep` 模式，联网查公告/财报/订单，补充知识库未覆盖的主题
+- [ ] **扩充知识库**：添加更多产业主题（机器人、固态电池、先进封装等）
 
-## 4. 当前里程碑
+### P2 — 中优先级
+- [ ] **Dashboard 整合 Serenity 结果**：在 Dashboard 中展示产业链分析结果
+- [ ] **合并 codex/p0-delivery-baseline 到 GitHub master**
+- [ ] **MNTS (Momentus) 独立分析**：创建空间基础设施产业链知识库
 
-### M0：基础研究管线
+### P3 — 低优先级
+- [ ] **Serenity 知识库自动更新**：定期从网络抓取产业链变化
+- [ ] **多股票对比**：在同一产业链中对比多个候选公司
+- [ ] **产业链可视化**：生成产业链拓扑图
 
-状态：已完成
+## 命令参考
 
-交付物：
+```powershell
+# Serenity 产业链扫描
+cd E:\Git\ClaudeCode\insight
 
-- 市场数据、基本面、技术面、Wyckoff、财报、流动性、期权、搜索/情绪、相关股票、ETF 检测等数据进入 `generate_analysis()`。
-- `scripts/analyze_stock.py` 能完成一键分析并写入 Obsidian。
+# 打印 Markdown 到 stdout
+.\.venv\Scripts\python.exe scripts/serenity_scan.py "MRAM" --dry-run
 
-### M1：Obsidian 研究闭环
+# 打印 JSON 到 stdout
+.\.venv\Scripts\python.exe scripts/serenity_scan.py "MRAM" --dry-run --json
 
-状态：已完成
+# 写入 Obsidian（需外出权限）
+.\.venv\Scripts\python.exe scripts/serenity_scan.py "MRAM"
 
-交付物：
+# 全部测试
+.\.venv\Scripts\python.exe -m pytest
 
-- Stock Wiki 初始化与更新。
-- Materials、Inbox、Dashboard、Tasks 的读写链路。
-- Timeline 和预测验证 section 可持续追加。
-
-### M2：研究质量与交易时机分离
-
-状态：已完成
-
-交付物：
-
-- 五维 Research Score。
-- Ready / Wait / Watch / Avoid Timing State。
-- 报告中明确区分“值得研究/持有”和“是否适合现在入场”。
-
-### M3：自动化入口与集成
-
-状态：进行中维护
-
-已完成：
-
-- MCP 服务。
-- Telegram Bot。
-- Inbox Watcher。
-- Podwise 同步。
-- Scheduler / launchd 相关文档。
-
-后续重点：
-
-- 确认 Windows 环境下调度方案是否需要独立文档或脚本封装。
-- 为常用入口建立更明确的 smoke test 清单。
-- 继续维护自动化入口回归覆盖，尤其是 watcher / bot / scheduler 的参数与副作用边界。
-
-### M4：投资级分析增强
-
-状态：进行中维护
-
-已完成工程化增强：
-
-- 回测结果新增 verified count、expectancy、median/best/worst return、profit factor、aggregate max drawdown 等指标。
-- `DataManager` 记录 Longbridge / Yahoo 数据源尝试状态，`generate_analysis()` 输出 `_data_sources` 便于排障和报告质量检查。
-- 新增 `ReportQualityEvaluator`，检查关键 section、Research Score / Timing State 分离和数据缺口披露。
-
-仍待补强方向：
-
-- 实时 GEX / options flow。
-- Insider / congressional trading。
-- Supply-chain mapping。
-- DCF / relative / SOTP 估值三角验证与分析师预期修订趋势。
-- SEPA stage confirmation。
-- 跨来源结构化 sentiment 与 read-only social/source readers。
-- ETF premium / NAV、options payoff、TradingView IV/Greeks、Hormuz oil/shipping geopolitical exposure 等场景工具。
-
-当前策略：本地模块提供基线数据和结构；完整投资级分析仍需要 Claude Code 调用 `himself65/finance-skills` v8.0.1 中的 market-analysis、data-providers 和 social-readers 相关 skills 补足实时和专业数据。
-
-## 5. 工作看板
-
-### Now
-
-| 任务 | 优先级 | 状态 | 下一步 |
-|---|---|---|---|
-| 测试环境与 smoke test 入口 | P0 | 已完成 | 使用 `requirements-dev.txt` 安装测试依赖后运行 `scripts/windows/run_smoke_tests.ps1`。 |
-| 最小回归清单固化 | P0 | 已完成 | 保持 runbook 中的 py_compile、pytest、Inbox dry-run、review ticker discovery 为默认验证入口。 |
-
-### Next
-
-| 任务 | 优先级 | 说明 |
-|---|---|---|
-| GitHub 主线合并 | P1 | 待办：当前分支已完成验证，但与远端 `master` 不是快进关系，需要单独处理合并冲突。 |
-
-### Later
-
-| 方向 | 价值 | 备注 |
-|---|---|---|
-| Skill 触发评估与打包 | 降低公开分发风险 | 后续可用 skill-creator eval viewer 做 with-skill / baseline 对比，并打包 `.skill`。 |
-| 外部实时/专业数据补齐 | 提高投资级分析完整性 | 继续通过 finance-skills 补 GEX、内部人、供应链、SEPA、TradingView IV/Greeks 等。 |
-
-### Done
-
-| 日期 | 事项 | 说明 |
-|---|---|---|
-| 2026-06-05 | 优化报告首屏阅读路径 | 报告标题改为 `代码 + 股票名称`，标题下展示数据时间；正文以 `本次分析总结` 开始，前置当前动作、主要矛盾、最大风险、动态 `关键判断` 和短数据质量提醒，再展开 Research Score、基本面、技术结构、市场结构、交易计划、催化风险和情绪。 |
-| 2026-06-05 | 补强 M4 投资级分析基线 | 回测新增 expectancy、profit factor、median/best/worst return、aggregate max drawdown；`DataManager` 新增来源尝试诊断并输出 `_data_sources`；新增 `ReportQualityEvaluator` 和 `tests/test_report_quality.py` / `tests/test_data_source_resilience.py`；smoke wrapper 纳入 M4 回归。 |
-| 2026-06-05 | 收紧 M3 自动化入口回归边界 | 新增 `tests/test_m3_boundaries.py`，覆盖 Telegram bot helper/command、Inbox watcher debounce / scan、Windows scheduler 脚本契约；`run_smoke_tests.ps1` 纳入 bot / watcher / scheduler 编译和自动化入口测试；补齐 `notify_telegram()` fallback。 |
-| 2026-06-04 | 融合 finance-skills v8.0.1 更新 | 通过 `npx skills add himself65/finance-skills` 安装 24 个本地 skills 到 `.agents/skills/`，生成 `skills-lock.json`，并将最新 market-analysis / data-providers / social-readers 清单同步到项目文档和本地 `/think` 检查清单。 |
-| 2026-06-04 | 补齐外部 finance skills 缺口清单化 | 在 `CLAUDE.md` 和 `INTEGRATION_PLAN.md` 中补充 full-analysis checklist，明确 GEX / insider / supply chain / SEPA / sentiment / earnings / liquidity 的调用时机。 |
-| 2026-06-04 | 补齐自动化入口测试边界 | 新增 `tests/test_automation_entrypoints.py`，覆盖 `scan_inbox.py` 的 dry-run / fallback、`run_review.py --list-tickers`、`update_dashboard.py` 的 scheduled reason 与 restore 路径。 |
-| 2026-06-04 | 收口 Git 可交付基线 | `codex/p0-delivery-baseline` 上的 smoke、scheduler 和 Dashboard 策略改动均已提交，工作区保持清洁。 |
-| 2026-06-03 | 完成 Dashboard 更新策略复核 | `scripts/update_dashboard.py` 新增 `--reason` / `--restore-backup`；Dashboard 改为备份 + 原子替换写入，并在 runbook / scheduler 文档中记录自动、手动和恢复路径。 |
-| 2026-06-03 | 固化 HIMS.US / 03986.HK 写入型 smoke example | 新增 `scripts/windows/run_write_smoke_examples.ps1` 和 `scripts/verify_write_smoke.py`；HIMS.US wiki+chart 验证通过，03986.HK wiki 验证通过。 |
-| 2026-06-03 | 完成 Windows Task Scheduler 实机验证 | 新增 `scripts/windows/verify_scheduled_tasks.ps1`；`trader-obsidian-inbox` / `review` / `dashboard` 三条任务注册、触发和日志验证通过。 |
-| 2026-06-03 | 修复 review runner 的 Windows PowerShell 兼容问题 | `run_scheduled_task.ps1` 改为 `Start-Process` + stdout/stderr 文件重定向，避免 loguru stderr 被误判为任务失败。 |
-| 2026-06-03 | 修复 backtest Decimal 价格序列兼容性 | `backtest/core.py` 强制将 close 序列转为 float，并补充 Decimal 回归测试。 |
-| 2026-06-02 | 建立 P0 smoke test 基线 | 新增 `requirements-dev.txt` 与 `scripts/windows/run_smoke_tests.ps1`；当前完整 smoke 通过，21 个回归测试通过。 |
-| 2026-06-02 | 修复复盘 ticker discovery 噪声 | 过滤 Obsidian wikilink、路径、人物名和主题名，避免定期复盘扫描非股票项。 |
-| 2026-06-02 | 改善报告可读性和复盘入口 | 报告标题改为股票名称+代码，空数据模块自动省略并汇总数据缺口；复盘全量扫描增加 wiki 文件 fallback 和 `--list-tickers`。 |
-| 2026-06-02 | 完成 Windows 定时任务方案 | 新增 `scripts/windows/run_scheduled_task.ps1` 和 `scripts/windows/register_scheduled_tasks.ps1`，`SCHEDULER.md` / runbook 已记录 Task Scheduler 流程。 |
-| 2026-05-27 | 固化 smoke test 清单 | `docs/runbook.md` 和 `docs/handoff.md` 已记录最小验证命令，当前三项回归测试通过。 |
-| 2026-05-25 | 创建 `project.md` | 建立项目进度、里程碑、看板和风险的统一管理入口。 |
-
-## 6. 风险与阻塞
-
-| 风险 | 影响 | 当前处理 |
-|---|---|---|
-| Windows 环境没有稳定 Python 命令 | smoke test 和自动任务不可复现 | 使用 `scripts/windows/run_smoke_tests.ps1 -PythonExe ...`，并通过 `requirements-dev.txt` 固化 `pytest`。 |
-| Windows 与 macOS/Linux 调度能力不一致 | 自动任务在 Windows 上可能不能直接使用 daemon 模式 | Windows 已验证 Task Scheduler 方案；不要默认 `scheduler.py --daemon` 可用。 |
-| 外部实时数据不足 | 投资级分析可能缺少 GEX、内部人、供应链、估值三角验证、分析师预期修订、结构化 sentiment、TradingView IV/Greeks 等关键变量 | 完整分析时调用 `himself65/finance-skills` v8.0.1 对应 skills，并在报告中标注数据缺口。 |
-| Obsidian section 被错误覆盖 | 长期研究历史可能丢失或结构损坏 | 保持 section 写入测试，修改写入逻辑时优先跑 `tests/test_section_write.py`。 |
-| Research Score 与 Timing State 混淆 | 导致错误交易建议 | 所有报告和代码改动都明确二者职责边界。 |
-
-## 7. 决策记录
-
-| 日期 | 决策 | 原因 | 影响 |
-|---|---|---|---|
-| 2026-06-02 | P0 先收敛到可交付基线 | 当前功能基本完成，但本地分支落后、工作区脏、Python/pytest 验证入口不稳定 | 后续新增功能前，先保证 Git 基线、测试环境和 smoke test 可复现。 |
-| 2026-05-25 | 使用 `project.md` 作为项目进度管理入口 | 项目已有 README / docs / handoff，但缺少面向进度推进的单页看板 | 后续阶段性任务、风险和里程碑集中维护在本文件。 |
-| 2026-05-25 | 不把 `INTEGRATION_PLAN.md` 当未来计划使用 | 该文件当前记录的是 Skills Integration Status | 未来计划和任务推进放在 `project.md`，集成状态继续留在 `INTEGRATION_PLAN.md`。 |
-
-## 8. 每周更新流程
-
-建议每周或每次阶段性开发后按以下顺序更新：
-
-1. 更新“当前状态快照”中发生变化的模块状态。
-2. 把完成的任务从 `Now` / `Next` 移到 `Done`。
-3. 检查是否有新的风险或阻塞。
-4. 补充重要决策到“决策记录”。
-5. 如果改动影响外部使用方式，同步更新：
-   - `README.md` / `README.zh.md`
-   - `docs/integration-guide.md`
-   - `docs/runbook.md`
-   - `docs/architecture.md`
-   - `docs/handoff.md`
-
-## 9. 新 Agent 接手检查
-
-开始处理任务前先运行或检查：
-
-```bash
-git status --short
-python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py
-python -c "from config import Config; print(Config.get_wiki_dir())"
-python scripts/scan_inbox.py --dry-run --json
+# 仅 Serenity 测试
+.\.venv\Scripts\python.exe -m pytest tests/test_serenity/ -v
 ```
 
-注意：不要在用户未明确要求写入报告时运行 `python scripts/analyze_stock.py <TICKER>`，因为它会写入 Obsidian。
+## 关键文件
 
-## 10. 关联文档
+| 文件 | 用途 |
+|------|------|
+| `data/serenity/integrator.py` | SerenityIntegrator — 将产业链分析融入 Obsidian 框架 |
+| `data/serenity/chain_analyzer.py` | 产业链拆解 + 知识库查找 |
+| `data/serenity/reference.py` | INDUSTRY_KNOWLEDGE 知识库 + LAYER_MAP 别名 |
+| `data/serenity/bottleneck_scorer.py` | 瓶颈评分 + 候选排序 |
+| `data/serenity/report_builder.py` | Markdown 生成 + Obsidian 写入 |
+| `scripts/serenity_scan.py` | CLI 入口 |
+| `SERENITY_INTEGRATION.md` | 集成文档 |
+| `project.md` | 本文件 — 项目进度追踪 |
 
-| 文档 | 用途 |
-|---|---|
-| `README.md` / `README.zh.md` | 项目介绍、安装和命令入口 |
-| `CLAUDE.md` | Claude Code 在本项目中的操作规则 |
-| `docs/architecture.md` | 架构、数据流和模块边界 |
-| `docs/integration-guide.md` | MCP、Telegram、Inbox、Podwise 集成说明 |
-| `docs/runbook.md` | 运维、调度、验证和故障排查 |
-| `docs/handoff.md` | 新维护者接手快照 |
-| `INTEGRATION_PLAN.md` | 已集成能力状态 |
-| `MCP_CONFIG.md` | MCP 配置参考 |
-| `SCHEDULER.md` | 调度与 launchd 说明 |
+## 环境信息
+
+- Windows, Python 3.12.13, PowerShell 7
+- `.venv\Scripts\python.exe`（非 `python`）
+- Obsidian 路径：`C:\Users\Lzw\Downloads\Documents\obsidian\Lzw\Lzw\4_Trader\Analysis\`
+- `.env` 配置：`WIKI_BASE_DIR` + `WIKI_SUBDIR`

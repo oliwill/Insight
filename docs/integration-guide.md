@@ -85,6 +85,35 @@ Main tools:
 
 Use `analyze_stock_tool` for data gathering and `write_analysis_tool` only after the client has produced analysis text.
 
+The data payload returned by `analyze_stock_tool` / `run_analysis.py <TICKER>` includes `supply_chain` when the deterministic Serenity adapter can map the ticker to an industry-chain theme. Clients should treat it as fundamental context, not as a trade signal by itself.
+
+## Finance Skills Companion
+
+External finance skills are optional Claude Code / agent-layer companions, not Python pipeline modules. Install the upstream plugin bundle when an agent should use richer valuation, estimate, sentiment, source-reader, and market-structure workflows:
+
+```bash
+npx plugins add himself65/finance-skills
+```
+
+Installed plugin groups:
+
+| Group | Policy | Skill-level summary |
+|---|---|---|
+| market-analysis | Baseline / Conditional / Explicit-only by skill | `company-valuation`, `estimate-analysis`, `stock-correlation`, `sepa-strategy` are baseline; `yfinance-data` is conditional; `stock-liquidity`, `earnings-preview`, `earnings-recap`, `options-payoff`, `etf-premium` are conditional; `saas-valuation-compression` is explicit-only |
+| data-providers | Baseline / Conditional | `funda-data` and `finance-sentiment` are baseline; `tradingview-reader` and `hormuz-strait` are conditional |
+| social-readers | Conditional | read-only `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`, and `opencli-reader` |
+| startup-tools | Explicit-only | `startup-analysis` only when startup/company diligence is requested |
+| ui-tools | Explicit-only | `generative-ui` only when a visual artifact is requested |
+| skill-creator | Explicit-only | `skill-creator` only when maintaining or authoring skills |
+
+Policy taxonomy:
+
+- Baseline: expected in comprehensive public-equity analysis when available and relevant to the claim.
+- Conditional: invoke only when the ticker, asset type, event, liquidity, data gap, or source requirement triggers it.
+- Explicit-only: use only when the user asks for that workflow.
+
+Keep social/source readers read-only. Do not post, write to external services, or execute trades through plugin skills. If a companion skill is unavailable, state the data gap instead of implying coverage.
+
 ## Telegram Bot
 
 Install dependencies:
@@ -200,6 +229,25 @@ External callers may pass canonical internal codes such as `HIMS.US`, `03986.HK`
 | `03986.HK` | `3986.HK` |
 | `00700.HK` | `0700.HK` |
 | `00388.HK` | `0388.HK` |
+
+## Serenity Supply-Chain Data
+
+For stock-analysis integrations, `supply_chain` is a compact Serenity-style industry-chain position object. It is exposed at the top level and mirrored under `fundamentals.supply_chain` so scoring and report generation can consume it.
+
+Important contract points:
+
+- `status="available"` means the ticker mapped to a known deterministic theme or cache entry.
+- `status="unknown"` means no stable theme mapping was found; this is not a fatal pipeline error.
+- `supply_chain_error` means the enrichment step failed but other pipeline modules should still be usable.
+- `target_layer`, `bottleneck_score`, `bottleneck_level`, `position`, `key_peers`, `opportunities`, and `risks` are intended for report context.
+- Do not write `supply_chain` into a separate top-level wiki section; full reports render it inside `## 三、基本面与估值` as `### 产业链位置`.
+
+Standalone theme scans remain available:
+
+```bash
+python scripts/serenity_scan.py "AI 半导体" --dry-run
+python scripts/serenity_scan.py MRAM --stock-code MRAM
+```
 
 ## Safe Markdown Section Writes
 

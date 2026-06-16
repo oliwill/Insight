@@ -1,6 +1,6 @@
 # Handoff Snapshot
 
-Status date: 2026-06-05
+Status date: 2026-06-12
 
 ## What Is Working
 
@@ -15,6 +15,7 @@ Status date: 2026-06-05
 | Timeline backtesting with extended metrics | implemented | `backtest.runner.BacktestRunner` |
 | Data-source fallback diagnostics | implemented | `data.manager.DataManager.get_source_status()` |
 | Report quality evaluator | implemented | `analyzer.report_quality.ReportQualityEvaluator` |
+| Serenity per-stock supply-chain enrichment | implemented | `data.supply_chain.StockChainAnalyzer` |
 | Public AI skill | implemented | `skills/stock-research-cockpit` |
 | Scheduled review | implemented | `scripts/run_review.py` |
 | MCP server | implemented | `python trader_mcp.py` |
@@ -35,6 +36,7 @@ Status date: 2026-06-05
 - Pipeline modules should emit `*_error` fields instead of stopping the full report.
 - Data-source fallback attempts should be inspectable via `_data_sources` in `generate_analysis()` output.
 - Generated reports should pass the quality evaluator for the title/data-time header, required sections, Research Score / Timing State separation, and data-gap disclosure.
+- `supply_chain` is additive fundamental context exposed at `market_data["supply_chain"]` and `fundamentals["supply_chain"]`; it must not create a separate top-level Obsidian section or hide missing financial fundamentals.
 - The report reading path is top-down: `# CODE Name`, `**数据时间**`, `## 一、本次分析总结`, optional dynamic `关键判断`, short `数据质量提醒`, then evidence and detailed modules.
 - Yahoo-backed modules normalize internal 5-digit HK symbols to Yahoo 4-digit `.HK` symbols while preserving canonical wiki identity.
 - Appended generated Markdown must not create new top-level wiki sections; module headings are stripped and research-note headings are demoted.
@@ -44,7 +46,7 @@ Status date: 2026-06-05
 ```bash
 git status --short
 python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py notification.py analyzer/report_quality.py
-PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_report_quality.py tests/test_backtest_review.py tests/test_data_source_resilience.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
+PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_report_quality.py tests/test_supply_chain.py tests/test_analysis_pipeline_supply_chain.py tests/test_fundamental_supply_chain.py tests/test_research_score_supply_chain.py tests/test_serenity/test_bottleneck_scorer.py tests/test_serenity/test_report_builder.py tests/test_backtest_review.py tests/test_data_source_resilience.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
 python -c "from config import Config; print(Config.get_wiki_dir())"
 python scripts/scan_inbox.py --dry-run --json
 ```
@@ -110,8 +112,8 @@ Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a re
 |---|---|
 | `README.md` / `README.zh.md` | onboarding and command overview |
 | `CLAUDE.md` | AI operating rules for this project |
-| `docs/architecture.md` | understanding data flow and module boundaries |
-| `docs/integration-guide.md` | connecting MCP, Telegram, Inbox watcher, Podwise |
+| `docs/architecture.md` | understanding data flow, module boundaries, and Serenity supply-chain enrichment |
+| `docs/integration-guide.md` | connecting MCP, Telegram, Inbox watcher, Podwise, and supply-chain data consumers |
 | `docs/runbook.md` | operations and troubleshooting |
 | `MCP_CONFIG.md` | MCP client configuration |
 | `SCHEDULER.md` | launchd / scheduler setup |
@@ -123,8 +125,9 @@ Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a re
 - macOS notifications use `osascript`; on Windows the notification module prints fallback text.
 - `scripts/backtest_raycat.py` uses a fixed ticker/date list and is a source-specific utility, not a generic backtest importer.
 - HIMS.US and 03986.HK have been validated as end-to-end Obsidian write smoke examples for the current analysis pipeline.
-- Full investment-grade stock analysis still needs external finance skills from `himself65/finance-skills` v8.0.1:
-  - market-analysis: `company-valuation`, `estimate-analysis`, `stock-correlation`, `stock-liquidity`, `sepa-strategy`, `earnings-preview`, `earnings-recap`, `options-payoff`, `etf-premium`, `yfinance-data`
-  - data-providers: `funda-data`, `finance-sentiment`, `tradingview-reader`, `hormuz-strait`
-  - social-readers: `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`, `opencli-reader`
-  - If any required skill is unavailable, explicitly record the data gap in the analysis.
+- Full investment-grade stock analysis uses external finance skills from `himself65/finance-skills` v8.0.1 as an agent-layer companion, installed with `npx plugins add himself65/finance-skills`:
+  - Baseline: `funda-data`, `company-valuation`, `estimate-analysis`, `stock-correlation`, `finance-sentiment`, `sepa-strategy`.
+  - Conditional: `yfinance-data`, `stock-liquidity`, `earnings-preview`, `earnings-recap`, `options-payoff`, `etf-premium`, `tradingview-reader`, `hormuz-strait`, and read-only source readers (`twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`, `opencli-reader`).
+  - Explicit-only: `saas-valuation-compression`, `startup-analysis`, `generative-ui`, `skill-creator`.
+  - Plugin groups: market-analysis, data-providers, social-readers, startup-tools, ui-tools, skill-creator.
+  - Keep source readers read-only, never invoke write/post/trade actions, and record unavailable skills/data gaps explicitly.

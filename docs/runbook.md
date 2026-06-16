@@ -21,6 +21,22 @@ the interpreter explicitly to the smoke-test wrapper:
 powershell -ExecutionPolicy Bypass -File scripts\windows\run_smoke_tests.ps1 -PythonExe "C:\path\to\python.exe"
 ```
 
+For the optional finance-skills agent companion:
+
+```bash
+npx plugins add himself65/finance-skills
+```
+
+This installs the six plugin groups used by agent workflows: market-analysis, data-providers, social-readers, startup-tools, ui-tools, and skill-creator. They are not Python pipeline dependencies.
+
+Policy summary:
+
+- Baseline: `funda-data`, `company-valuation`, `estimate-analysis`, `stock-correlation`, `finance-sentiment`, `sepa-strategy`
+- Conditional: `yfinance-data`, `stock-liquidity`, `earnings-preview`, `earnings-recap`, `options-payoff`, `etf-premium`, `tradingview-reader`, `hormuz-strait`, `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`, `opencli-reader`
+- Explicit-only: `startup-analysis`, `generative-ui`, `saas-valuation-compression`, `skill-creator`
+
+Keep social/source readers read-only; do not post, write to external services, or execute trades through plugin skills.
+
 Optional features require the same requirements file:
 
 | Feature | Dependency |
@@ -67,7 +83,10 @@ Manual equivalent:
 ```bash
 # Verify imports and syntax
 python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py notification.py telegram_bot.py inbox_watcher.py scheduler.py
-python -m py_compile data/manager.py data/earnings.py data/liquidity.py data/options.py data/correlation.py data/etf.py data/search.py analyzer/report_quality.py
+python -m py_compile data/manager.py data/earnings.py data/liquidity.py data/options.py data/correlation.py data/etf.py data/search.py data/supply_chain.py analyzer/report_quality.py
+
+# Verify Serenity supply-chain guards
+PYTHONIOENCODING=utf-8 python -m pytest tests/test_supply_chain.py tests/test_analysis_pipeline_supply_chain.py tests/test_fundamental_supply_chain.py tests/test_research_score_supply_chain.py tests/test_serenity/test_bottleneck_scorer.py tests/test_serenity/test_report_builder.py
 
 # Verify regression guards
 PYTHONIOENCODING=utf-8 python -m pytest tests/test_yahoo_symbol.py tests/test_section_write.py tests/test_report_generator.py tests/test_report_quality.py tests/test_backtest_review.py tests/test_data_source_resilience.py tests/test_dashboard_update.py tests/test_automation_entrypoints.py tests/test_scheduler.py tests/test_m3_boundaries.py
@@ -107,7 +126,8 @@ Expected side effects:
 
 - `Analysis/AAPL_US.md`, `Analysis/HIMS_US.md`, or `Analysis/03986_HK.md` exists under `Config.get_wiki_dir()` depending on the symbol tested.
 - `Charts/{CODE}_wyckoff.png` may exist under `WIKI_BASE_DIR/Charts` if enough historical rows are available.
-- Generated reports should start with `# CODE Name`, `**数据时间**`, then `## 一、本次分析总结`; the top section should front-load current action, main tension, primary risk, dynamic `关键判断`, and short data-quality reminders before detailed evidence.
+- Generated reports should start with `# CODE Name`, `**数据时间**`, then `## 一、本次分析总结`; the top section should front-load the deterministic one-sentence conclusion, current action, main tension, primary risk, dynamic `关键判断`, and short data-quality reminders before detailed evidence.
+- When available, Serenity supply-chain analysis should appear inside `## 三、基本面与估值` as `### 产业链位置`; it should not hide missing financial fundamentals in `## 数据缺口`.
 - Top-level sections such as `研究笔记`, `财报预期`, `流动性分析`, `期权市场`, and `交叉引用` should appear once as line-anchored `##` headings.
 - Report headings inside `研究笔记` should be nested as `###` or lower, not `#` or `##`.
 - Dashboard updates when `python run_analysis.py --dashboard` is run.
@@ -222,6 +242,10 @@ This writes `raycat_backtest_report.md` into the wiki directory.
 | `ModuleNotFoundError: telegram` | Telegram dependency missing | `pip install -r requirements.txt` |
 | `ModuleNotFoundError: longbridge` | optional SDK missing | install requirements or accept Yahoo fallback |
 | `*_error` in analysis JSON | one pipeline module failed | continue with available fields and note limitation |
+| `supply_chain.status` is `unknown` | ticker did not map to a known Serenity theme/cache | treat as missing industry-chain context; add a cache entry only if the mapping is known |
+| `supply_chain_error` in analysis JSON | supply-chain enrichment failed | proceed with financial/technical data and inspect `data/supply_chain.py` mapping/cache inputs |
+| Finance companion plugin unavailable | plugin not installed or agent not reloaded | run `npx plugins add himself65/finance-skills`, reload the agent, or disclose the missing data gap |
+| Source reader attempts to write/post | wrong workflow for research mode | stop; social/source readers are read-only and must not post, write to external services, or execute trades |
 | macOS notification fails on Windows | `osascript` unavailable | expected fallback; use console/log output |
 | `scheduler.py --daemon` fails on Windows | `os.fork()` unavailable | use `scripts/windows/register_scheduled_tasks.ps1` or run foreground |
 | Windows scheduled task does not run | wrong Python path or working directory | re-register with `-PythonExe "C:\path\to\python.exe"` and check `logs\scheduler\*.log` |
