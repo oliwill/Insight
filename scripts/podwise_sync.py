@@ -74,7 +74,7 @@ def get_episode_list(days: int) -> list:
         )
 
         if result.returncode != 0:
-            print(f"WARNING: 获取 episode 列表失败: {result.stderr}")
+            print(f"⚠️  获取 episode 列表失败: {result.stderr}")
             return []
 
         # 解析 JSON 输出
@@ -92,10 +92,10 @@ def get_episode_list(days: int) -> list:
         return parse_text_list(result.stdout)
 
     except subprocess.TimeoutExpired:
-        print("WARNING: 获取 episode 列表超时")
+        print("⏱️  获取 episode 列表超时")
         return []
     except Exception as e:
-        print(f"ERROR: 获取 episode 列表失败: {e}")
+        print(f"❌ 获取 episode 列表失败: {e}")
         return []
 
 
@@ -198,7 +198,7 @@ imported: {datetime.now().strftime("%Y-%m-%d %H:%M")}
         file_path.write_text(frontmatter, encoding="utf-8")
 
     except Exception as e:
-        print(f"  WARNING: 添加 frontmatter 失败: {e}")
+        print(f"  ⚠️  添加 frontmatter 失败: {e}")
 
 
 # ========== 主程序 ==========
@@ -213,7 +213,7 @@ def main():
 
     # 检查 Podwise CLI
     if not check_podwise():
-        print("ERROR: Podwise CLI 不可用")
+        print("❌ Podwise CLI 不可用")
         print("请安装: brew install hardhackerlabs/podwise-tap/podwise")
         print("或: curl -sL https://raw.githubusercontent.com/hardhackerlabs/podwise-cli/main/install.sh | sh")
         print("然后运行: podwise auth")
@@ -224,18 +224,18 @@ def main():
     if not output_dir.exists():
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"OUTPUT_DIR: {output_dir}")
-    print(f"SYNC_DAYS: 最近 {args.days} 天")
+    print(f"📂 输出目录: {output_dir}")
+    print(f"📅 同步范围: 最近 {args.days} 天")
 
     # 获取 episode 列表
-    print("\nGET EPISODE LIST...")
+    print("\n🔍 获取 episode 列表...")
     episodes = get_episode_list(args.days)
 
     if not episodes:
-        print("NO_EPISODES")
+        print("📭 没有找到 episodes")
         return 0
 
-    print(f"FOUND_EPISODES: {len(episodes)}")
+    print(f"📝 找到 {len(episodes)} 个 episodes")
 
     # 如果只是列表
     if args.list:
@@ -244,12 +244,12 @@ def main():
             podcast = ep.get("podcast_name", "未知")
             url = ep.get("url", "")
             print(f"{i}. {title}")
-            print(f"   PODCAST: {podcast}")
-            print(f"   URL: {url}")
+            print(f"   🎙️  {podcast}")
+            print(f"   🔗 {url}")
         return 0
 
     # 同步
-    print(f"\nSTART_SYNC...")
+    print(f"\n🔄 开始同步...")
 
     results = {"success": 0, "failed": 0, "skipped": 0}
 
@@ -260,25 +260,25 @@ def main():
         print(f"\n[{i}/{len(episodes)}] {title}")
 
         if not url:
-            print(f"  WARNING: 跳过: 无 URL")
+            print(f"  ⚠️  跳过: 无 URL")
             results["skipped"] += 1
             continue
 
         result = sync_episode(url, output_dir, dry_run=args.dry_run)
 
         if result["success"]:
-            print(f"  OK: {result['path']}")
+            print(f"  ✅ {result['path']}")
             results["success"] += 1
         elif result["error"]:
-            print(f"  ERROR: {result['error']}")
+            print(f"  ❌ {result['error']}")
             results["failed"] += 1
 
     # 总结
     print(f"\n{'='*50}")
     print(f"同步完成:")
-    print(f"  OK: {results['success']}")
-    print(f"  ERROR: {results['failed']}")
-    print(f"  SKIPPED: {results['skipped']}")
+    print(f"  ✅ 成功: {results['success']}")
+    print(f"  ❌ 失败: {results['failed']}")
+    print(f"  ⏭️  跳过: {results['skipped']}")
     print(f"{'='*50}")
 
     return 0 if results["failed"] == 0 else 1

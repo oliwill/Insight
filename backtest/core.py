@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from math import isinf
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -47,14 +48,36 @@ class BacktestResult:
     win_rate: float = 0.0
     avg_return: float = 0.0
     avg_holding_days: float = 0.0
+    verified_count: int = 0
+    expectancy_pct: float = 0.0
+    median_return_pct: float = 0.0
+    best_return_pct: float = 0.0
+    worst_return_pct: float = 0.0
+    profit_factor: Optional[float] = None
+    avg_max_drawdown_pct: float = 0.0
+    max_drawdown_pct: float = 0.0
+
+    @staticmethod
+    def _format_profit_factor(value: Optional[float]) -> str:
+        if value is None:
+            return "N/A"
+        if isinf(value):
+            return "∞"
+        return f"{value:.2f}"
 
     def to_markdown(self) -> str:
         lines = [
             f"### {self.ticker} Backtest ({self.analysis_date})",
             "",
             f"- Total signals: {self.total_signals}",
+            f"- Verified signals: {self.verified_count}",
             f"- Win rate: {self.win_rate:.1f}% ({self.win_count}/{self.loss_count + self.win_count})",
             f"- Avg return: {self.avg_return:.2f}%",
+            f"- Expectancy: {self.expectancy_pct:+.2f}%",
+            f"- Median return: {self.median_return_pct:+.2f}%",
+            f"- Best/Worst return: {self.best_return_pct:+.2f}% / {self.worst_return_pct:+.2f}%",
+            f"- Profit factor: {self._format_profit_factor(self.profit_factor)}",
+            f"- Max drawdown: {self.max_drawdown_pct:.2f}%",
             f"- Avg holding: {self.avg_holding_days:.1f} days",
             "",
             "| Signal | Action | Entry | Exit | Return | Max DD | Correct |",
@@ -144,7 +167,7 @@ class BacktestEngine:
         if len(hold_df) < 2:
             logger.warning(f"{ticker} insufficient holding period data")
             return perf
-        prices = hold_df["close"].values
+        prices = hold_df["close"].astype(float).to_numpy()
         perf.holding_days = len(hold_df) - 1
         if action == "BUY":
             perf.return_pct = (prices[-1] / perf.entry_price - 1) * 100
@@ -185,13 +208,31 @@ class BacktestEngine:
         if verified:
             bt.win_count = sum(1 for s in verified if s.correct)
             bt.loss_count = len(verified) - bt.win_count
+            bt.verified_count = len(verified)
             bt.win_rate = bt.win_count / len(verified) * 100
-            bt.avg_return = np.mean([s.return_pct for s in verified])
-            bt.avg_holding_days = np.mean([s.holding_days for s in verified])
+            returns = [s.return_pct for s in verified]
+            gains = [value for value in returns if value > 0]
+            losses = [value for value in returns if value < 0]
+            drawdowns = [s.max_drawdown_pct for s in verified]
+            bt.avg_return = float(np.mean(returns))
+            bt.expectancy_pct = bt.avg_return
+            bt.median_return_pct = float(np.median(returns))
+            bt.best_return_pct = float(np.max(returns))
+            bt.worst_return_pct = float(np.min(returns))
+            if losses:
+                bt.profit_factor = float(sum(gains) / abs(sum(losses))) if gains else 0.0
+            elif gains:
+                bt.profit_factor = float("inf")
+            else:
+                bt.profit_factor = None
+            bt.avg_max_drawdown_pct = float(np.mean(drawdowns)) if drawdowns else 0.0
+            bt.max_drawdown_pct = float(np.min(drawdowns)) if drawdowns else 0.0
+            bt.avg_holding_days = float(np.mean([s.holding_days for s in verified]))
             bt.summary = (
                 f"{ticker} {analysis_date}: {bt.total_signals} signals, "
                 f"verified {len(verified)}, win rate {bt.win_rate:.1f}%, "
-                f"avg return {bt.avg_return:+.2f}%"
+                f"avg return {bt.avg_return:+.2f}%, "
+                f"profit factor {bt._format_profit_factor(bt.profit_factor)}"
             )
         else:
             bt.summary = "Signals not verifiable (insufficient data)"

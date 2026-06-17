@@ -41,3 +41,9 @@ def test_yf_symbol_keeps_us_and_cn_conventions():
     assert DataManager._yf_symbol("AAPL.US") == "AAPL"
     assert DataManager._yf_symbol("SH603906") == "603906.SS"
     assert DataManager._yf_symbol("SZ000001") == "000001.SZ"
+
+
+def test_normalize_symbol_accepts_cn_exchange_suffixes():
+    assert DataManager.normalize_symbol("600000.SH") == "SH600000"
+    assert DataManager.normalize_symbol("000001.SZ") == "SZ000001"
+    assert DataManager.normalize_symbol("002428.SZ") == "SZ002428"

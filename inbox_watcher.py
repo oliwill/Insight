@@ -43,12 +43,6 @@ try:
 except ImportError:
     WATCHDOG_AVAILABLE = False
 
-    class FileSystemEventHandler:
-        pass
-
-    class FileCreatedEvent:
-        pass
-
 from notification import notify_telegram
 
 # ========== 配置 ==========
@@ -121,7 +115,7 @@ class InboxHandler(FileSystemEventHandler):
         if '.obsidian' in event.src_path or '~' in Path(event.src_path).name:
             return
 
-        print(f"New file detected: {Path(event.src_path).name}")
+        print(f"📄 检测到新文件: {Path(event.src_path).name}")
 
         # 触发防抖
         self.debouncer.trigger(event.src_path)
@@ -134,14 +128,14 @@ class InboxHandler(FileSystemEventHandler):
         if not event.dest_path.endswith('.md'):
             return
 
-        print(f"Moved file detected: {Path(event.dest_path).name}")
+        print(f"📄 检测到文件移动: {Path(event.dest_path).name}")
         self.debouncer.trigger(event.dest_path)
 
 
 def trigger_scan(files: list):
     """触发扫描"""
     print(f"\n{'='*50}")
-    print(f"SCAN_TRIGGERED ({len(files)} new files)")
+    print(f"🔄 触发扫描 ({len(files)} 个新文件)")
     print(f"{'='*50}")
 
     for f in files:
@@ -161,10 +155,10 @@ def trigger_scan(files: list):
         elapsed = time.time() - start_time
 
         if result.returncode == 0:
-            message = f"SCAN_OK ({elapsed:.1f}s)\n\n{result.stdout}"
+            message = f"✅ 扫描完成 ({elapsed:.1f}s)\n\n{result.stdout}"
             print(message)
         else:
-            message = f"SCAN_ERROR ({elapsed:.1f}s)\n\n{result.stderr}"
+            message = f"⚠️ 扫描完成但有错误 ({elapsed:.1f}s)\n\n{result.stderr}"
             print(message)
 
         # 发送 Telegram 通知
@@ -182,11 +176,11 @@ def trigger_scan(files: list):
         notify_telegram("Inbox 监控", summary)
 
     except subprocess.TimeoutExpired:
-        message = f"SCAN_TIMEOUT ({SCAN_TIMEOUT}s)"
+        message = f"⏱️ 扫描超时 ({SCAN_TIMEOUT}s)"
         print(message)
         notify_telegram("Inbox 监控", f"扫描超时")
     except Exception as e:
-        message = f"SCAN_FAILED: {str(e)}"
+        message = f"❌ 扫描失败: {str(e)}"
         print(message)
         notify_telegram("Inbox 监控", f"扫描失败: {str(e)}")
 
@@ -199,8 +193,8 @@ def trigger_scan(files: list):
 def start_daemon():
     """启动守护进程"""
     if not WATCHDOG_AVAILABLE:
-        print("ERROR: watchdog not installed")
-        print("Install with: pip install watchdog")
+        print("❌ 错误: watchdog 未安装")
+        print("请运行: pip install watchdog")
         return 1
 
     # 检查是否已在运行
@@ -208,7 +202,7 @@ def start_daemon():
         try:
             old_pid = int(PID_FILE.read_text().strip())
             os.kill(old_pid, 0)
-            print(f"ERROR: watcher already running (PID: {old_pid})")
+            print(f"❌ 监控已在运行 (PID: {old_pid})")
             return 1
         except (OSError, ValueError):
             pass
@@ -219,11 +213,11 @@ def start_daemon():
         if path and Path(path).exists():
             watch_dirs.append((name, path))
         else:
-            print(f"WARNING: {name} directory missing: {path}")
+            print(f"⚠️  {name} 目录不存在: {path}")
 
     if not watch_dirs:
-        print("ERROR: no directories to watch")
-        print("Configure OBSIDIAN_INBOX_DIR in .env")
+        print("❌ 错误: 没有可监控的目录")
+        print("请在 .env 中配置 OBSIDIAN_INBOX_DIR 等路径")
         return 1
 
     # 写 PID 文件
@@ -242,8 +236,8 @@ def start_daemon():
 
     # 启动
     observer.start()
-    print(f"Debounce delay: {DEBOUNCE_DELAY}s")
-    print("Watcher running... (Ctrl+C to stop)")
+    print(f"⏱️  防抖延迟: {DEBOUNCE_DELAY}s")
+    print("🔄 监控运行中... (Ctrl+C 停止)")
 
     # 信号处理
     def signal_handler(signum, frame):
@@ -259,7 +253,7 @@ def start_daemon():
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nGoodbye")
+        print("\n👋 再见")
 
     observer.join()
     PID_FILE.unlink(missing_ok=True)
@@ -269,13 +263,13 @@ def start_daemon():
 def stop_daemon():
     """停止监控"""
     if not PID_FILE.exists():
-        print("Watcher not running")
+        print("❌ 监控未在运行")
         return 0
 
     try:
         pid = int(PID_FILE.read_text().strip())
         os.kill(pid, signal.SIGTERM)
-        print(f"Stop signal sent (PID: {pid})")
+        print(f"✅ 已发送停止信号 (PID: {pid})")
 
         # 等待进程退出
         for _ in range(10):
@@ -284,32 +278,32 @@ def stop_daemon():
                 time.sleep(0.5)
             except OSError:
                 PID_FILE.unlink(missing_ok=True)
-                print("Watcher stopped")
+                print("✅ 监控已停止")
                 return 0
 
-        print("Process did not respond; force stopping")
+        print("⏱️  进程未响应，强制终止")
         os.kill(pid, signal.SIGKILL)
         PID_FILE.unlink(missing_ok=True)
         return 0
 
     except Exception as e:
-        print(f"ERROR: stop failed: {e}")
+        print(f"❌ 停止失败: {e}")
         return 1
 
 
 def status_daemon():
     """查看监控状态"""
     if not PID_FILE.exists():
-        print("Watcher not running")
-        return 0
+        print("❌ 监控未运行")
+        return 1
 
     try:
         pid = int(PID_FILE.read_text().strip())
         os.kill(pid, 0)
-        print(f"Watcher running (PID: {pid})")
+        print(f"✅ 监控运行中 (PID: {pid})")
         return 0
     except (OSError, ValueError):
-        print("PID file exists but process is gone")
+        print("❌ PID 文件存在但进程已消失")
         PID_FILE.unlink(missing_ok=True)
         return 1
 

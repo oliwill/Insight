@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Stock Research Cockpit is a portable AI skill and local companion workflow for evidence-backed equity research."
+    />
+    <title>Stock Research Cockpit</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#workbench" aria-label="Stock Research Cockpit home">
+        <span class="brand-mark" aria-hidden="true">SR</span>
+        <span>
+          <strong>Stock Research Cockpit</strong>
+          <small>Insight skill release</small>
+        </span>
+      </a>
+      <nav class="topnav" aria-label="Primary">
+        <a href="#workbench">Workbench</a>
+        <a href="#install">Install</a>
+        <a href="../README.md">Docs</a>
+      </nav>
+    </header>
+
+    <main id="workbench" class="workbench">
+      <section class="control-rail" aria-labelledby="launch-title">
+        <p class="eyebrow">Reusable AI skill plus local companion</p>
+        <h1 id="launch-title">Build a research cockpit from a ticker.</h1>
+        <p class="lede">
+          Start with the public skill, add the local pipeline when you need Obsidian write-back,
+          and use finance companion plugins as read-only agent-layer coverage for deeper sources.
+        </p>
+
+        <form id="research-form" class="research-form">
+          <label class="field-label" for="ticker-input">Ticker or company</label>
+          <div class="input-row">
+            <input
+              id="ticker-input"
+              name="ticker"
+              type="text"
+              value="AAPL"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="16"
+              aria-describedby="ticker-help"
+            />
+            <button class="button primary" type="submit">Build</button>
+          </div>
+          <p id="ticker-help" class="field-help">Try AAPL, NVDA, TSLA, 00700, or any custom ticker.</p>
+
+          <fieldset class="mode-picker">
+            <legend>Operating mode</legend>
+            <label>
+              <input type="radio" name="mode" value="skill" checked />
+              <span>Skill only</span>
+            </label>
+            <label>
+              <input type="radio" name="mode" value="local" />
+              <span>Local companion</span>
+            </label>
+            <label>
+              <input type="radio" name="mode" value="finance" />
+              <span>Finance plugin</span>
+            </label>
+          </fieldset>
+
+          <label class="field-label" for="question-input">Research question</label>
+          <textarea id="question-input" rows="5">Is the thesis improving, and what evidence would move Timing State from Wait to Ready?</textarea>
+
+          <fieldset class="source-grid">
+            <legend>Source coverage</legend>
+            <label><input type="checkbox" name="source" value="fundamentals" checked /> Fundamentals</label>
+            <label><input type="checkbox" name="source" value="price" checked /> Price action</label>
+            <label><input type="checkbox" name="source" value="news" checked /> News</label>
+            <label><input type="checkbox" name="source" value="sentiment" /> Sentiment</label>
+          </fieldset>
+        </form>
+
+        <div class="rail-note" id="install">
+          <div>
+            <strong>Install path</strong>
+            <span id="active-install-label">Codex local skill</span>
+          </div>
+          <button id="copy-install" class="button secondary" type="button">Copy command</button>
+        </div>
+      </section>
+
+      <section class="cockpit" aria-live="polite">
+        <div class="cockpit-head">
+          <div>
+            <p class="eyebrow">Live preview</p>
+            <h2 id="company-name">Apple Inc.</h2>
+          </div>
+          <div class="state-pill" id="timing-pill">Timing: Wait</div>
+        </div>
+
+        <div class="status-grid" aria-label="Research summary metrics">
+          <article class="metric-card">
+            <span>Research Score</span>
+            <strong id="score-value">82</strong>
+            <small id="score-label">High conviction</small>
+          </article>
+          <article class="metric-card">
+            <span>Confidence</span>
+            <strong id="confidence-value">76%</strong>
+            <small id="confidence-label">Source coverage medium</small>
+          </article>
+          <article class="metric-card">
+            <span>Primary action</span>
+            <strong id="action-value">Wait</strong>
+            <small id="action-label">Entry trigger missing</small>
+          </article>
+          <article class="metric-card">
+            <span>Data gaps</span>
+            <strong id="gap-value">2</strong>
+            <small id="gap-label">Disclosed before conclusion</small>
+          </article>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Cockpit views">
+          <button class="tab is-active" type="button" role="tab" aria-selected="true" data-tab="analysis">
+            Analysis
+          </button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="install">Install</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="workflow">Workflow</button>
+        </div>
+
+        <section id="analysis-panel" class="tab-panel is-active" data-panel="analysis">
+          <div class="analysis-layout">
+            <div class="chart-panel">
+              <div class="panel-heading">
+                <h3>Price and thesis pressure</h3>
+                <span id="chart-caption">AAPL sample path</span>
+              </div>
+              <canvas id="price-canvas" width="900" height="420" aria-label="Sample price path chart"></canvas>
+            </div>
+
+            <div class="evidence-panel">
+              <div class="panel-heading">
+                <h3>Evidence stack</h3>
+                <span id="mode-caption">Skill only</span>
+              </div>
+              <div id="evidence-list" class="evidence-list"></div>
+            </div>
+          </div>
+
+          <div class="report-panel">
+            <div class="panel-heading">
+              <h3>Generated brief</h3>
+              <span id="updated-at">Updated now</span>
+            </div>
+            <pre id="report-output"></pre>
+          </div>
+        </section>
+
+        <section id="install-panel" class="tab-panel" data-panel="install">
+          <div class="install-layout">
+            <div class="install-menu" role="tablist" aria-label="Install command selector">
+              <button class="install-option is-active" type="button" data-install="codex">Codex local</button>
+              <button class="install-option" type="button" data-install="agents">Agents local</button>
+              <button class="install-option" type="button" data-install="repo">Repo local</button>
+              <button class="install-option" type="button" data-install="finance">Finance plugin</button>
+            </div>
+            <pre class="command-box"><code id="install-command"></code></pre>
+          </div>
+          <p class="install-note">
+            The public skill works by itself. The finance plugin is optional and follows three tiers: Baseline
+            skills (`funda-data`, `company-valuation`, `estimate-analysis`, `stock-correlation`, `finance-sentiment`,
+            `sepa-strategy`), Conditional skills (`yfinance-data`, `stock-liquidity`, `earnings-preview`,
+            `earnings-recap`, `options-payoff`, `etf-premium`, `tradingview-reader`, `hormuz-strait`,
+            `twitter-reader`, `telegram-reader`, `discord-reader`, `linkedin-reader`, `yc-reader`,
+            `opencli-reader`), and Explicit-only groups (`startup-analysis`, `generative-ui`,
+            `saas-valuation-compression`, `skill-creator`). Source readers stay read-only; no posting, external
+            writes, or trade execution.
+          </p>
+        </section>
+
+        <section id="workflow-panel" class="tab-panel" data-panel="workflow">
+          <ol class="workflow-list">
+            <li>
+              <strong>Question</strong>
+              <span>Capture ticker, thesis, user notes, and known constraints.</span>
+            </li>
+            <li>
+              <strong>Evidence</strong>
+              <span>Separate sourced claims from assumptions, then expose data gaps.</span>
+            </li>
+            <li>
+              <strong>Research score</strong>
+              <span>Score business quality and valuation without mixing in trade timing.</span>
+            </li>
+            <li>
+              <strong>Timing state</strong>
+              <span>Decide Ready, Wait, Watch, or Avoid based on entry quality and risk.</span>
+            </li>
+            <li>
+              <strong>Write-back</strong>
+              <span>Use the local companion only when Obsidian persistence is explicitly desired.</span>
+            </li>
+          </ol>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

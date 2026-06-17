@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from loguru import logger
 
+from config import Config
 from data.manager import DataManager
 from memory.manager import MemoryManager
 from analyzer.base import AnalysisResult
@@ -128,6 +129,8 @@ class BacktestRunner:
                 explicit_text = f"BUY {core_view}"
             signals = self._extract_signals_from_text(explicit_text)
             if not signals:
+                # Legacy timeline entries without an explicit action word default to HOLD,
+                # so they still backtest as a passive hold over the window.
                 signals = ["HOLD"]
 
             result = AnalysisResult(
@@ -157,16 +160,8 @@ class BacktestRunner:
             {ticker: [BacktestResult, ...]}
         """
         all_results: Dict[str, List[BacktestResult]] = {}
-        index = self.mm.get_index()
-
-        # Parse tickers from index markdown table
-        tickers = []
-        for line in index.split("\n"):
-            if line.startswith("|") and "---" not in line and "代码" not in line:
-                parts = [p.strip() for p in line.split("|")]
-                parts = [p for p in parts if p]
-                if parts:
-                    tickers.append(parts[0])
+        tickers = self._discover_tickers()
+        logger.info(f"Backtest discovered {len(tickers)} ticker(s)")
 
         for ticker in tickers:
             try:
@@ -177,6 +172,91 @@ class BacktestRunner:
                 logger.error(f"Backtest failed for {ticker}: {e}")
 
         return all_results
+
+    def _discover_tickers(self) -> List[str]:
+        """Discover tracked stock wiki pages from index first, then wiki files."""
+        tickers: List[str] = []
+
+        index = self.mm.get_index()
+        for line in index.split("\n"):
+            if line.startswith("|") and "---" not in line and "代码" not in line:
+                parts = [p.strip() for p in line.split("|")]
+                parts = [p for p in parts if p]
+                if parts:
+                    ticker = self._normalize_discovered_ticker(parts[0])
+                    if ticker:
+                        tickers.append(ticker)
+
+        wiki_dir = Config.get_wiki_dir()
+        if wiki_dir.exists():
+            for wiki_file in wiki_dir.glob("*.md"):
+                if wiki_file.name in ("index.md", "log.md"):
+                    continue
+                try:
+                    text = wiki_file.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                if "## 分析时间线" not in text and "## 预测验证" not in text:
+                    continue
+                ticker = self._normalize_discovered_ticker(wiki_file.stem)
+                if ticker:
+                    tickers.append(ticker)
+
+        return self._dedupe_tickers(tickers)
+
+    @staticmethod
+    def _ticker_from_wiki_stem(stem: str) -> str:
+        """Convert wiki filename stem back to the canonical ticker convention."""
+        return stem.replace("_", ".", 1)
+
+    @classmethod
+    def _normalize_discovered_ticker(cls, raw: str) -> Optional[str]:
+        """Normalize a ticker found in index rows or wiki filenames."""
+        ticker = (raw or "").strip()
+        if not ticker:
+            return None
+
+        if ticker.startswith("[[") and ticker.endswith("]]"):
+            ticker = ticker[2:-2].split("|", 1)[0].strip()
+
+        ticker = ticker.replace("\\", "/").split("/")[-1]
+        if ticker.lower().endswith(".md"):
+            ticker = ticker[:-3]
+
+        if "_" in ticker and "." not in ticker and not ticker.upper().startswith(("SH", "SZ")):
+            ticker = cls._ticker_from_wiki_stem(ticker)
+
+        ticker = ticker.strip().upper()
+        if ticker in {"CODE", "TICKER", "NAME", "TITLE", "STOCK", "代码", "名称", "主题"}:
+            return None
+        if not re.fullmatch(r"[A-Z0-9.]+", ticker):
+            return None
+
+        patterns = [
+            r"[A-Z]{1,5}",
+            r"[A-Z]{1,5}\.US",
+            r"[A-Z0-9]{1,8}\.[A-Z]{2,4}",
+            r"\d{5}",
+            r"\d{5}\.HK",
+            r"\d{6}",
+            r"\d{6}\.(SH|SZ|SS)",
+            r"(SH|SZ)\d{6}",
+        ]
+        if any(re.fullmatch(pattern, ticker) for pattern in patterns):
+            return ticker
+        return None
+
+    @staticmethod
+    def _dedupe_tickers(tickers: List[str]) -> List[str]:
+        seen = set()
+        deduped = []
+        for ticker in tickers:
+            ticker = ticker.strip()
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
+            deduped.append(ticker)
+        return deduped
 
     def _extract_signals_from_text(self, text: str) -> List[str]:
         """Extract BUY/SELL/HOLD signals from text"""

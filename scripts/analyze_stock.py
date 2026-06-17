@@ -8,6 +8,7 @@
 """
 import sys
 import os
+import argparse
 from pathlib import Path
 
 project_root = Path(__file__).parent.parent
@@ -16,6 +17,7 @@ sys.path.insert(0, str(project_root))
 from run_analysis import write_analysis_to_obsidian
 from data.analysis_pipeline import generate_analysis
 from analyzer.report_generator import ReportGenerator
+from analyzer.report_quality import ReportQualityEvaluator
 from analyzer.research_score import ResearchScoreEngine
 from analyzer.timing_engine import TimingEngine
 from data.manager import DataManager
@@ -121,11 +123,14 @@ def generate_wyckoff_chart(stock_code: str, df, market_data: dict) -> None:
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python scripts/analyze_stock.py <STOCK_CODE>")
-        sys.exit(1)
+    if len(sys.argv) >= 2 and sys.argv[1] == "--dashboard":
+        print("Use `python scripts/update_dashboard.py` or `python run_analysis.py --dashboard` to update the dashboard.")
+        sys.exit(2)
 
-    stock_code = sys.argv[1]
+    parser = argparse.ArgumentParser(description="Analyze one stock and write the report to Obsidian")
+    parser.add_argument("stock_code", help="Stock code, e.g. AAPL or 03986.HK")
+    args = parser.parse_args()
+    stock_code = args.stock_code
 
     # 获取分析数据
     market_data = generate_analysis(stock_code)
@@ -143,6 +148,13 @@ def main():
         if 'business' in fund_result.details:
             market_data['fundamentals']['moat'] = fund_result.details['business'].get('moat')
             market_data['fundamentals']['moat_indicators'] = fund_result.details['business'].get('moat_indicators', [])
+
+        from analyzer.fundamental import build_moat_stress_test
+        market_data['fundamentals']['moat_stress_test'] = build_moat_stress_test(
+            market_data.get('stock_info', {}),
+            market_data.get('fundamentals', {}) or {},
+            market_data.get('peers', []) or [],
+        )
     except Exception as e:
         print(f"护城河分析失败（跳过）: {e}")
 
@@ -194,6 +206,11 @@ def main():
 
     # 使用统一报告生成器
     analysis_text = ReportGenerator.generate(analysis_code, market_data, research_score_obj, timing, evidence)
+    quality = ReportQualityEvaluator().evaluate(analysis_text, market_data)
+    if not quality.passed:
+        print(f"报告质量需复核: {quality.score}/100")
+        for issue in quality.issues[:5]:
+            print(f"- [{issue.severity}] {issue.code}: {issue.message}")
 
     # 评分和核心观点
     score = research_score_obj.total_adjusted_score

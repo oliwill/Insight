@@ -43,8 +43,8 @@ class ReportGenerator:
             f"\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             "\n## Summary",
             "",
-            "| Ticker | Signals | Win Rate | Avg Return | Avg Holding |",
-            "|--------|---------|----------|------------|-------------|",
+            "| Ticker | Signals | Win Rate | Avg Return | Expectancy | Profit Factor | Max DD | Avg Holding |",
+            "|--------|---------|----------|------------|------------|---------------|--------|-------------|",
         ]
 
         grand_total = 0
@@ -57,11 +57,25 @@ class ReportGenerator:
             losses = sum(r.loss_count for r in ticker_results)
             verified = wins + losses
             win_rate = wins / verified * 100 if verified else 0
-            avg_ret = sum(r.avg_return for r in ticker_results) / len(ticker_results) if ticker_results else 0
+            returns = [s.return_pct for r in ticker_results for s in r.signals if s.verified]
+            gains = [value for value in returns if value > 0]
+            losses_pct = [value for value in returns if value < 0]
+            drawdowns = [s.max_drawdown_pct for r in ticker_results for s in r.signals if s.verified]
+            avg_ret = sum(returns) / len(returns) if returns else 0
+            expectancy = avg_ret
+            if losses_pct:
+                profit_factor = sum(gains) / abs(sum(losses_pct)) if gains else 0
+                profit_factor_display = f"{profit_factor:.2f}"
+            elif gains:
+                profit_factor_display = "∞"
+            else:
+                profit_factor_display = "N/A"
+            max_dd = min(drawdowns) if drawdowns else 0
             avg_hold = sum(r.avg_holding_days for r in ticker_results) / len(ticker_results) if ticker_results else 0
 
             lines.append(
-                f"| {ticker} | {total_signals} | {win_rate:.1f}% | {avg_ret:+.2f}% | {avg_hold:.1f}d |"
+                f"| {ticker} | {total_signals} | {win_rate:.1f}% | {avg_ret:+.2f}% | "
+                f"{expectancy:+.2f}% | {profit_factor_display} | {max_dd:.2f}% | {avg_hold:.1f}d |"
             )
 
             grand_total += verified
@@ -116,6 +130,12 @@ class ReportGenerator:
                         "return_pct": s.return_pct,
                         "max_return_pct": s.max_return_pct,
                         "max_drawdown_pct": s.max_drawdown_pct,
+                        "expectancy_pct": bt.expectancy_pct,
+                        "median_return_pct": bt.median_return_pct,
+                        "profit_factor": bt.profit_factor,
+                        "best_return_pct": bt.best_return_pct,
+                        "worst_return_pct": bt.worst_return_pct,
+                        "aggregate_max_drawdown_pct": bt.max_drawdown_pct,
                         "correct": s.correct,
                         "verified": s.verified,
                     })

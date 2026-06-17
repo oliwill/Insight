@@ -27,6 +27,16 @@ from backtest.review import ReviewScheduler
 from notification import notify, notify_success, notify_error
 
 
+def _parse_summary_counts(summary: str) -> tuple[int, int]:
+    """Parse ticker/signal counts from the human-readable review summary."""
+    import re
+
+    m = re.search(r"覆盖\s*(\d+)\s*只股票，验证\s*(\d+)\s*条信号", summary)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return 0, 0
+
+
 def run_review(tickers: list = None, days_after: int = 30, lookback_days: int = 90) -> dict:
     """
     执行回测复盘
@@ -48,16 +58,7 @@ def run_review(tickers: list = None, days_after: int = 30, lookback_days: int = 
             tickers=tickers,
         )
 
-        # 从 summary 中提取统计
-        # summary 是 markdown 格式，我们简单解析
-        ticker_count = summary.count("|") // 4  # 粗略估计
-        signal_count = 0
-        if "验证" in summary:
-            # 尝试提取 "验证 N 条信号"
-            import re
-            m = re.search(r"验证\s*(\d+)\s*条信号", summary)
-            if m:
-                signal_count = int(m.group(1))
+        ticker_count, signal_count = _parse_summary_counts(summary)
 
         return {
             "success": True,
@@ -83,7 +84,18 @@ def main():
     parser.add_argument("--lookback", type=int, default=90, help="回看天数")
     parser.add_argument("--notify", action="store_true", help="发送 macOS 通知")
     parser.add_argument("--json", action="store_true", help="输出 JSON 格式")
+    parser.add_argument("--list-tickers", action="store_true", help="只列出全量复盘会扫描的股票，不执行回测")
     args = parser.parse_args()
+
+    if args.list_tickers:
+        scheduler = ReviewScheduler()
+        tickers = args.tickers if args.tickers else scheduler.runner._discover_tickers()
+        payload = {"tickers": tickers, "count": len(tickers)}
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print("\n".join(tickers) if tickers else "No tickers discovered.")
+        return 0
 
     start_time = datetime.now()
     result = run_review(

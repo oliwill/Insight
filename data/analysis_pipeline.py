@@ -169,6 +169,7 @@ def generate_analysis(code: str) -> Dict[str, Any]:
             'wiki_summary': str | None,
             'stock_info': dict,
             'fundamentals': dict,
+            'supply_chain': dict,
             'earnings': dict,
             'kline_rows': int,
             'technicals': dict,
@@ -227,6 +228,27 @@ def generate_analysis(code: str) -> Dict[str, Any]:
         output['fundamentals_error'] = str(e)
     except Exception as e:
         output['fundamentals_error'] = f"Unexpected: {str(e)}"
+
+    # ===== Step 1a: 产业链/供应链分析（基本面增强） =====
+    try:
+        from data.supply_chain import StockChainAnalyzer
+
+        sca = StockChainAnalyzer()
+        supply_chain = sca.analyze(
+            code,
+            stock_info=output.get('stock_info', {}),
+            fundamentals=output.get('fundamentals', {}) or {},
+        )
+        output['supply_chain'] = supply_chain
+        if isinstance(output.get('fundamentals'), dict):
+            output['fundamentals']['supply_chain'] = supply_chain
+            output['fundamentals']['industry_chain_position'] = supply_chain.get('position', '')
+    except ImportError:
+        output['supply_chain_error'] = 'StockChainAnalyzer module not available'
+    except (FileNotFoundError, KeyError, ValueError, OSError) as e:
+        output['supply_chain_error'] = str(e)
+    except Exception as e:
+        output['supply_chain_error'] = f"Unexpected: {str(e)}"
 
     # ===== Step 1.5: 财报预期 (earnings-preview) =====
     try:
@@ -341,6 +363,19 @@ def generate_analysis(code: str) -> Dict[str, Any]:
     except Exception as e:
         output['peers_error'] = f"Unexpected: {str(e)}"
 
+    # ===== Step 3a: 护城河压力测试 =====
+    try:
+        from analyzer.fundamental import build_moat_stress_test
+
+        if isinstance(output.get('fundamentals'), dict):
+            output['fundamentals']['moat_stress_test'] = build_moat_stress_test(
+                output.get('stock_info', {}),
+                output.get('fundamentals', {}) or {},
+                output.get('peers', []) or [],
+            )
+    except Exception as e:
+        output['moat_stress_test_error'] = f"Unexpected: {str(e)}"
+
     # ===== Step 4: ETF 检测 (etf-premium) =====
     try:
         from data.etf import ETFAnalyzer
@@ -355,4 +390,5 @@ def generate_analysis(code: str) -> Dict[str, Any]:
     except Exception as e:
         output['etf_error'] = f"Unexpected: {str(e)}"
 
+    output['_data_sources'] = dm.get_source_status()
     return output
