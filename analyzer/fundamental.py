@@ -7,6 +7,8 @@
 3. 估值分析（横向+纵向对比）
 4. 成长性与估值匹配度
 """
+import re
+
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional
@@ -274,6 +276,17 @@ def _first_sentence(text: str) -> str:
 
 
 def _infer_business_model(stock_info: Dict[str, Any], fundamentals: Dict[str, Any]) -> str:
+    """根据 business_summary / sector / industry 推断业务模式。
+
+    设计要点（修复子串匹配过宽问题）：
+    1. 英文关键词用词边界匹配（\\b），避免 'platform data storage'/'networking
+       equipment'/'cross-platform' 这类技术语境被误判为平台公司。
+    2. 中文关键词直接子串匹配（CJK 无词边界概念）。
+    3. 优先级：资源型 / 基础设施（强信号）优先于平台 / 渠道（弱信号），
+       因为 'equipment'+'platform' 同时出现时，设备制造才是主业务。
+    4. 不再用 'and' 作为多种模式叠加的信号——几乎所有英文句子都含 'and'。
+       只保留明确的 'hybrid' / '叠加'。
+    """
     summary = " ".join(
         str(part)
         for part in [
@@ -287,18 +300,33 @@ def _infer_business_model(stock_info: Dict[str, Any], fundamentals: Dict[str, An
         if part
     ).lower()
 
-    if any(keyword in summary for keyword in ("platform", "marketplace", "ecosystem", "network", "平台", "生态")):
-        return "平台公司"
-    if any(keyword in summary for keyword in ("channel", "distribution", "dealer", "retail", "渠道", "经销")):
-        return "渠道公司"
-    if any(keyword in summary for keyword in ("infrastructure", "cloud", "datacenter", "data center", "power", "equipment", "foundry", "fab", "基础设施", "设备")):
-        return "基础设施公司"
-    if any(keyword in summary for keyword in ("resource", "mining", "oil", "gas", "commodity", "矿", "资源")):
-        return "资源型公司"
-    if any(keyword in summary for keyword in ("software", "saas", "subscription", "应用", "软件")):
-        return "产品/订阅型公司"
-    if "and" in summary or "叠加" in summary or "hybrid" in summary:
+    def has(pattern: str) -> bool:
+        return re.search(pattern, summary) is not None
+
+    # 英文词用词边界（\\b）；含中文的退化为子串（CJK 无词边界概念）
+    def wb(word: str) -> str:
+        if word.isascii():
+            return r"\b" + re.escape(word) + r"\b"
+        return re.escape(word)
+
+    def any_wb(words) -> bool:
+        return any(has(wb(w)) for w in words)
+
+    # 0. 自述的多种模式叠加优先级最高（明确意图，而非推断）
+    if any_wb(["hybrid model", "hybrid business", "叠加", "多种模式"]):
         return "多种模式叠加"
+    # 以下按强信号到弱信号排序
+    if any_wb(["resource", "mining", "oil", "gas", "commodity", "矿", "资源", "正极材料", "精细化工"]):
+        return "资源型公司"
+    # manufactur 前缀覆盖 manufacture/manufactures/manufacturing
+    if has(r"manufactur") or any_wb(["infrastructure", "cloud", "datacenter", "data center", "power", "equipment", "foundry", "fab", "packaging", "基础设施", "设备", "封测", "制造"]):
+        return "基础设施公司"
+    if any_wb(["software", "saas", "subscription", "应用", "软件"]):
+        return "产品/订阅型公司"
+    if any_wb(["marketplace", "ecosystem", "platform", "平台", "生态"]):
+        return "平台公司"
+    if any_wb(["channel", "distribution", "dealer", "retail", "渠道", "经销"]):
+        return "渠道公司"
     return "产品公司"
 
 

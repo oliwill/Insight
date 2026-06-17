@@ -208,12 +208,14 @@ def test_build_moat_stress_test_full_degradation_with_empty_inputs():
 
 
 def test_build_moat_stress_test_priority_sortable_and_complete():
+    # 注意：'SaaS platform' 中 'saas' 是更具体的产品/订阅信号，优先于泛化的 'platform'，
+    # 因此业务模式归类为 产品/订阅型公司（而非平台）。价格竞争假设优先级随之为 high。
     result = build_moat_stress_test(
         {"name": "P", "sector": "Technology", "industry": "Software"},
         {"market_cap": 10e9, "gross_margin": 0.7, "business_summary": "SaaS platform"},
         [],
     )
-    # 平台类业务应识别出来
+    assert result["subject"]["business_model"] == "产品/订阅型公司"
     priorities = {a["key"]: a["priority"] for a in result["assumptions_to_verify"]}
     assert priorities["customer_concentration"] == "high"
-    assert priorities["price_competition"] == "medium"
+    assert priorities["price_competition"] == "high"  # 产品/订阅型 → price_competition = high
