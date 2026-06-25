@@ -1,4 +1,4 @@
-# trader-obsidian
+# insight
 
 [English](README.md) | 简体中文
 
