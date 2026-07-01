@@ -351,6 +351,25 @@ def generate_analysis(code: str) -> Dict[str, Any]:
     except Exception as e:
         output['web_search_error'] = f"Unexpected: {str(e)}"
 
+    # ===== Step 2a: KOL 观点抓取（twitter MCP）=====
+    # 定向 KOL watchlist + 按 ticker 实时讨论；无凭据/失败均不阻断主流程
+    try:
+        from data.twitter_kol import KOLFetcher
+        kf = KOLFetcher()
+        if kf.has_credentials():
+            kol = kf.fetch_all(code)
+            output['kol_signals'] = kol
+            # 同时并入 web_search，让 SentimentAnalyzer._extract_texts 自动纳入 KOL 文本
+            ws = output.get('web_search')
+            if isinstance(ws, dict) and kol:
+                ws['kol_signals'] = kol
+        else:
+            output['kol_signals_skipped'] = 'no X credentials configured'
+    except ImportError:
+        output['kol_signals_error'] = 'twitter_kol module not available'
+    except Exception as e:
+        output['kol_signals_error'] = f"Unexpected: {e}"
+
     # ===== Step 3: 相关性分析 (stock-correlation) =====
     try:
         from data.correlation import CorrelationAnalyzer

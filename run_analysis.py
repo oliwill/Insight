@@ -155,6 +155,7 @@ def write_analysis_to_obsidian(
     options: Dict = None,
     peers: List[Dict] = None,
     web_search: Dict = None,
+    kol_signals: Dict = None,
     evidence_markdown: str = "",
     research_score_markdown: str = "",
     timing_markdown: str = "",
@@ -275,6 +276,35 @@ def write_analysis_to_obsidian(
             lines.append("")
         if len(lines) > 1:
             mm.append_to_section(stock_code, "社交情绪", "\n".join(lines))
+
+    # 6. KOL 观点汇总 (twitter MCP)
+    if kol_signals and (kol_signals.get("kol") or kol_signals.get("ticker")):
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+        lines = [f"\n\n### [{now_str}] KOL 观点扫描\n"]
+        kol_posts = kol_signals.get("kol", [])
+        if kol_posts:
+            lines.append("**关注 KOL 近期观点:**\n")
+            for t in kol_posts[:5]:
+                author = t.get("author", "")
+                text = (t.get("text", "") or "")[:100]
+                likes = t.get("likes", 0)
+                url = t.get("url", "")
+                link_md = f"([link]({url}))" if url else ""
+                lines.append(f"- @{author}: {text} {link_md} ❤{likes}")
+            lines.append("")
+        ticker_posts = kol_signals.get("ticker", [])
+        if ticker_posts:
+            lines.append("**$TICKER 相关讨论:**\n")
+            for t in ticker_posts[:5]:
+                author = t.get("author", "")
+                text = (t.get("text", "") or "")[:100]
+                likes = t.get("likes", 0)
+                url = t.get("url", "")
+                link_md = f"([link]({url}))" if url else ""
+                lines.append(f"- @{author}: {text} {link_md} ❤{likes}")
+            lines.append("")
+        if len(lines) > 1:
+            mm.append_to_section(stock_code, "KOL 观点汇总", "\n".join(lines))
 
     # 追加到研究笔记
     note_text = _demote_markdown_headings(analysis_text)

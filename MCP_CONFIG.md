@@ -82,6 +82,58 @@ Restart the MCP client, then ask:
 
 If the client can call the tools and returns JSON/Markdown, the server is configured.
 
+## 5. Twitter / X MCP (optional, for `## KOL 观点汇总`)
+
+The X developer platform ships an official MCP server ([`xdevplatform/xmcp`](https://github.com/xdevplatform/xmcp), wraps the X API v2 OpenAPI spec) and a companion CLI ([`xdevplatform/xurl`](https://github.com/xdevplatform/xurl)). This project’s `data/twitter_kol.py` can reach X via either path and writes results into the `## KOL 观点汇总` report section.
+
+### 5a. Get credentials
+
+1. Go to [console.x.com](https://console.x.com) and create a Project + App.
+2. Generate a **Bearer Token** (App-only, read-only — recommended) under “Keys and tokens”.
+3. (Optional) Set up OAuth2 user context for user-timeline tools: add `X_CLIENT_ID` / `X_CLIENT_SECRET` and a redirect URI in the app settings.
+
+### 5b. Add to `.env`
+
+```env
+X_API_BEARER_TOKEN=<your_bearer_token>
+X_MCP_MODE=local                  # local (xurl/opencli subprocess) | remote (hosted mcp.x.com)
+KOL_WATCHLIST=Serenity,Compound24 # comma-separated handles, no @
+```
+
+### 5c. Register the X MCP server (client-side)
+
+Add to your MCP client’s `mcpServers` config (e.g. Claude Code’s `~/.claude.json`, Claude Desktop’s config). The server runs over stdio:
+
+```json
+{
+  "mcpServers": {
+    "twitter": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "xmcp"],
+      "env": {
+        "X_API_BEARER_TOKEN": "<your_bearer_token>"
+      }
+    }
+  }
+}
+```
+
+> The hosted alternative is documented at [docs.x.com/tools/mcp](https://docs.x.com/tools/mcp) — point `X_MCP_MODE=remote` in `.env` if you prefer it.
+
+### 5d. Verify
+
+```bash
+python -c "from data.twitter_kol import KOLFetcher; k=KOLFetcher(); print(k.has_credentials(), k.fetch_all('AAPL.US'))"
+```
+
+Then run a full analysis and confirm the `## KOL 观点汇总` section of `Analysis/AAPL_US.md` is populated:
+
+```bash
+python scripts/analyze_stock.py AAPL
+```
+
+Without credentials, the pipeline sets `kol_signals_skipped` and continues normally — the report section stays at its placeholder.
+
 ## Tools
 
 | Tool | Function | Parameters |

@@ -131,6 +131,13 @@ class SentimentAnalyzer:
         for item in web_search_data.get("reddit", []):
             texts["reddit"].append(item.get("title", ""))
 
+        # KOL 观点（来自 twitter MCP，并入 social 维度，权重 ×1.2 已由 _analyze_social_sentiment 处理）
+        kol = web_search_data.get("kol_signals") or {}
+        for item in (kol.get("kol", []) + kol.get("ticker", [])):
+            content = item.get("text", "")
+            if content:
+                texts["social"].append(content)
+
         return texts
 
     def _analyze_news_sentiment(self, texts: List[str]) -> float:
