@@ -14,6 +14,10 @@ __all__ = [
     "ResearchDimensionScore",
     "TimingEngine",
     "TimingState",
+    "DowChannelAnalyzer",
+    "VolumeProfileAnalyzer",
+    "MultiTimeframeAnalyzer",
+    "ForceBalanceAnalyzer",
 ]
 
 
@@ -35,6 +39,18 @@ def __getattr__(name):
     if name == "ComprehensiveAnalyzer":
         from .comprehensive import ComprehensiveAnalyzer
         return ComprehensiveAnalyzer
+    if name == "DowChannelAnalyzer":
+        from .dow_channel import DowChannelAnalyzer
+        return DowChannelAnalyzer
+    if name == "VolumeProfileAnalyzer":
+        from .volume_profile import VolumeProfileAnalyzer
+        return VolumeProfileAnalyzer
+    if name == "MultiTimeframeAnalyzer":
+        from .multi_timeframe import MultiTimeframeAnalyzer
+        return MultiTimeframeAnalyzer
+    if name == "ForceBalanceAnalyzer":
+        from .force_balance import ForceBalanceAnalyzer
+        return ForceBalanceAnalyzer
     if name in {"get_analyzer", "list_analyzers"}:
         from .models import get_analyzer, list_analyzers
         return {"get_analyzer": get_analyzer, "list_analyzers": list_analyzers}[name]

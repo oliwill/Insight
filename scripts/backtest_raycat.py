@@ -5,6 +5,7 @@
 获取每个笔记中提到的股票代码和发布日期，
 计算从发布日期到现在的收益率。
 """
+import argparse
 import os
 import re
 import sys
@@ -395,8 +396,15 @@ class RaycatBacktester:
         return str(report_file)
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """构建命令行参数解析器。"""
+    return argparse.ArgumentParser(description="raycat.substack.com 股票推荐回测")
+
+
+def main(argv=None):
     """主函数"""
+    build_parser().parse_args(argv)
+
     print("=" * 80)
     print("raycat.substack.com 股票推荐回测")
     print("=" * 80)
