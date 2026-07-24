@@ -87,7 +87,7 @@ When user asks to analyze a stock (e.g., "分析 AAPL"):
    | `earnings-recap` | 实际 vs 预期、股价反应、电话会要点 | 财报后 |
    | `stock-liquidity` | ADTV、bid-ask 价差、大单冲击估算 | 小市值 / 低流动性标的必做 |
    | `sepa-strategy` | Stage 判断 + VCP / 趋势模板技术形态 | 每次必做 |
-   | `twitter-reader` | 读取关键 KOL（如 Serenity）最新推文 | 有 KOL 持仓信号时 |
+   | `twitter-reader` | 读取关键 KOL（如 Serenity）最新推文；配 X MCP 凭据后管线**自动抓取**并写入 `## KOL 观点汇总`，未配则按需 Agent 深度调用（读完整 thread） | 配 X MCP：每次自动；未配：有 KOL 持仓信号时 |
 
 4. **Write comprehensive analysis** — mandatory sections in order:
 
@@ -280,7 +280,8 @@ The `DataManager.normalize_symbol()` function handles canonical internal symbols
 | `analyzer.report_generator.ReportGenerator` | `generate()` | Unified report formatting (tables + emojis) |
 | `analyzer.wyckoff_chart.WyckoffChartRenderer` | `render()` | Wyckoff chart visualization (price, MA, zones, phases, events) |
 | `analyzer.trading_grid.TradingGridGenerator` | `generate()` | Trading grid with Fibonacci levels, ATR stops, R/R ratios |
-| `data.sentiment_analyzer.SentimentAnalyzer` | `analyze()` | Sentiment scoring: news, social, fear/greed index |
+| `data.sentiment_analyzer.SentimentAnalyzer` | `analyze()` | Sentiment scoring: news, social (含 KOL), fear/greed index |
+| `data.twitter_kol.KOLFetcher` | `fetch_all()`, `fetch_watchlist()`, `fetch_by_ticker()`, `has_credentials()` | X/Twitter KOL 观点抓取（自动写入 `## KOL 观点汇总`，无凭据返回空） |
 | `data.analysis_pipeline` | `generate_analysis()` | Complete data pipeline (all modules) |
 | `data.manager.DataManager` | `normalize_symbol()`, `get_historical_data()`, `get_fundamentals()`, `get_stock_info()` | Market data |
 | `memory.manager.MemoryManager` | `init_stock_wiki()`, `append_to_timeline()`, `update_evaluation_table()`, `get_stock_context()`, `save_material()` | Wiki persistence |
@@ -363,3 +364,9 @@ Optional (defaults to Yahoo Finance if missing):
 - `LONGBRIDGE_APP_KEY`
 - `LONGBRIDGE_APP_SECRET`
 - `LONGBRIDGE_ACCESS_TOKEN`
+
+Optional (X / Twitter KOL — defaults to skipping `## KOL 观点汇总` if missing):
+- `X_API_BEARER_TOKEN` - X API Bearer Token (recommended, App-only read; from `console.x.com`)
+- `X_CLIENT_ID` / `X_CLIENT_SECRET` - OAuth2 user-context (optional, for user-timeline tools)
+- `X_MCP_MODE` - `local` (default, subprocess `xurl`/`opencli`) | `remote` (hosted `mcp.x.com`)
+- `KOL_WATCHLIST` - Comma-separated KOL handles without `@` (e.g. `Serenity,Compound24`)

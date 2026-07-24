@@ -178,6 +178,7 @@ def main():
     options = market_data.get('options', {})
     peers = market_data.get('peers', [])
     web_search = market_data.get('web_search', {})
+    kol_signals = market_data.get('kol_signals', {})
 
     # 生成 Cockpit 结构化输出：证据、Research Score、Timing State
     mm = MemoryManager()
@@ -247,6 +248,7 @@ def main():
         options=options,
         peers=peers,
         web_search=web_search,
+        kol_signals=kol_signals,
         evidence_markdown=evidence_markdown,
         research_score_markdown=research_score_markdown,
         timing_markdown=timing_markdown,
