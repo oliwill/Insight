@@ -1,7 +1,7 @@
 """
-成交量语言分析器 — 把 PDF 框架的量价三段论编码为可量化模块
+成交量语言分析器 — 把 趋势博弈分析框架的量价三段论编码为可量化模块
 
-PDF 理论映射（《应用篇 六 道氏理论在实战中的运用》）：
+趋势博弈分析框架映射（《应用篇 六 道氏理论在实战中的运用》）：
 - 量价齐升：确定性最高，但最连贯的一段往往在天量之前（接近末端）
 - 量价紊乱：紊乱后等待缩量，缩量后出现标志性 K 线组合才是买点
 - 平量推升（最优质走法）：基石仓位锁定 + 温和供需，无法造假
@@ -165,10 +165,10 @@ class VolumeProfileAnalyzer(BaseAnalyzer):
 
         if is_volume_spike and spike_followed_by_decline:
             profile.regime = "爆冲巨量"
-            profile.risks.append("爆冲巨量后走阴跌，疑似抢帽子出货/主力派发（PDF 四问法：等量能平静后再看）")
+            profile.risks.append("爆冲巨量后走阴跌，疑似抢帽子出货/主力派发（趋势博弈框架四问法：等量能平静后再看）")
         elif is_flat:
             profile.regime = "平量推升"
-            profile.signals.append("平量推升：筹码锁定，最优质走法（PDF：好东西大家都不舍得送给别人）")
+            profile.signals.append("平量推升：筹码锁定，最优质走法（趋势博弈分析框架：好东西大家都不舍得送给别人）")
         elif price_change_20d > 3.0 and vol_ratio > 1.2 and price_vol_corr > 0:
             profile.regime = "量价齐升"
             profile.signals.append("量价齐升，确定性较高（注意：最连贯的一段往往在天量之前）")

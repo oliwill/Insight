@@ -1,12 +1,12 @@
 """
-多空博弈分析器 — 把 PDF 框架的九地形态、抢帽子、筹码锁定论编码为可量化模块
+多空博弈分析器 — 把 趋势博弈分析框架的九地形态、抢帽子、筹码锁定论编码为可量化模块
 
-PDF 理论映射（《应用篇 五 道氏理论在实战中的运用》）：
+趋势博弈分析框架映射（《应用篇 五 道氏理论在实战中的运用》）：
 - 九地形态：散地/争地/重地/圮地/交地/围地/死地
 - 抢帽子：连续涨停+巨量 = 主力派发，散户陷阱
 - 筹码锁定论：平量推升 = 基石仓位锁定
 - 引友杀敌：突破阻力后回落（假突破）
-采用"可观测代理变量"映射 PDF 的定性概念。
+采用"可观测代理变量"映射趋势博弈分析框架的定性概念。
 """
 import pandas as pd
 import numpy as np
@@ -218,11 +218,11 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
         if fb.accumulation_evidence >= 65:
             fb.signals.append(f"主力吸筹证据较强（{fb.accumulation_evidence:.0f}）：底部缩量+长下影线+低点抬高")
         if fb.chip_lock_likelihood >= 65:
-            fb.signals.append(f"筹码锁定可能性高（{fb.chip_lock_likelihood:.0f}）：平量推升=基石仓位，PDF 最优质走法")
+            fb.signals.append(f"筹码锁定可能性高（{fb.chip_lock_likelihood:.0f}）：平量推升=基石仓位，趋势博弈框架下的最优质走法")
         if fb.distribution_evidence >= 65:
             fb.risks.append(f"主力派发证据较强（{fb.distribution_evidence:.0f}）：高位爆量滞涨+上影线")
         if fb.retail_trap_risk >= 65:
-            fb.risks.append(f"散户陷阱风险高（{fb.retail_trap_risk:.0f}）：疑似抢帽子游戏，PDF 四问法审视")
+            fb.risks.append(f"散户陷阱风险高（{fb.retail_trap_risk:.0f}）：疑似抢帽子游戏，趋势博弈框架四问法审视")
 
     def _calculate_score(self, fb: ForceBalance) -> float:
         score = 50.0
@@ -244,3 +244,4 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
             f"吸筹{fb.accumulation_evidence:.0f} 派发{fb.distribution_evidence:.0f} "
             f"锁定{fb.chip_lock_likelihood:.0f} 陷阱{fb.retail_trap_risk:.0f}"
         )
+

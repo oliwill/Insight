@@ -32,6 +32,11 @@ class TimingEngine:
         options = market_data.get("options", {}) or {}
         web_search = market_data.get("web_search", {}) or {}
         fundamentals = market_data.get("fundamentals", {}) or {}
+        # 趋势博弈分析框架技术分析模块
+        volume_profile = market_data.get("volume_profile", {}) or {}
+        dow_channel = market_data.get("dow_channel", {}) or {}
+        force_balance = market_data.get("force_balance", {}) or {}
+        multi_timeframe = market_data.get("multi_timeframe", {}) or {}
 
         score = 50
         reasons: List[str] = []
@@ -41,6 +46,10 @@ class TimingEngine:
 
         score += self._trend_score(technicals, reasons, entry_triggers)
         score += self._wyckoff_score(wyckoff, reasons, entry_triggers, invalidation_triggers)
+        score += self._volume_score(volume_profile, reasons, risk_flags)
+        score += self._channel_score(dow_channel, reasons, entry_triggers, risk_flags)
+        score += self._force_balance_score(force_balance, reasons, risk_flags)
+        score += self._timeframe_score(multi_timeframe, reasons, risk_flags)
         score += self._price_quality_score(stock_info, technicals, fundamentals, reasons, entry_triggers)
         score += self._catalyst_score(earnings, reasons, risk_flags)
         score += self._liquidity_score(liquidity, reasons, risk_flags)
@@ -151,6 +160,131 @@ class TimingEngine:
         if resistance:
             entry_triggers.append(f"放量突破 Wyckoff 阻力 ${resistance:.2f} 后回踩确认")
 
+        return score
+
+    # ------------------------------------------------------------------
+    # 趋势博弈分析框架子分：成交量语言 / 道氏通道 / 多空博弈 / 多时间框架
+    # ------------------------------------------------------------------
+    def _volume_score(self, volume_profile: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+        """成交量语言子分（趋势博弈分析框架：平量推升/量价齐升/量价紊乱/爆冲巨量）"""
+        if not volume_profile:
+            return 0
+        regime = volume_profile.get("regime", "")
+        score = 0
+        if regime == "平量推升":
+            score += 12
+            reasons.append("平量推升：筹码锁定，最优质量价形态")
+        elif regime == "量价齐升":
+            score += 6
+            reasons.append("量价齐升，确定性较高")
+        elif regime == "爆冲巨量":
+            score -= 10
+            reasons.append("爆冲巨量疑似抢帽子出货")
+            risk_flags.append("爆冲巨量骗局风险：趋势博弈框架四问法审视，等量能平静后再看")
+        elif regime == "量价紊乱":
+            score -= 4
+            reasons.append("量价紊乱，等待缩量后标志K线")
+        elif regime == "缩量阴跌":
+            score -= 6
+            reasons.append("缩量阴跌，动能衰竭")
+        return score
+
+    def _channel_score(self, dow_channel: Dict, reasons: List[str],
+                       entry_triggers: List[str], risk_flags: List[str]) -> int:
+        """道氏通道子分（趋势博弈分析框架：通道/斜率/颈线/顶底信号）"""
+        if not dow_channel:
+            return 0
+        score = 0
+        direction = dow_channel.get("channel_direction", "")
+        slope_state = dow_channel.get("slope_state", "")
+        neckline = dow_channel.get("neckline_signal", "")
+        top_bottom = dow_channel.get("top_bottom_signal", "")
+        position = dow_channel.get("position_in_channel", 0.5)
+        lower = dow_channel.get("lower_channel")
+
+        if direction == "上升":
+            score += 4
+        elif direction == "下降":
+            score -= 4
+        if "趋缓" in slope_state:
+            score += 5
+            reasons.append("斜率趋缓（扶老太太下楼）：主力温和吸筹")
+        if top_bottom == "底部三步信号":
+            score += 6
+            reasons.append("道氏底部三步信号：通道趋缓+筑底")
+            if lower:
+                entry_triggers.append(f"道氏通道下沿 ¥{lower:.2f} 附近为潜在底部建仓区")
+        elif top_bottom == "顶部三步信号":
+            score -= 8
+            reasons.append("道氏顶部三步信号：出轨→颈线→通道下沿")
+            risk_flags.append("顶部信号：注意分批止盈")
+        if neckline == "颈线已突破":
+            score += 4
+            reasons.append("颈线已突破，技术派跟风资金可能介入")
+        elif neckline == "颈线已跌破":
+            score -= 4
+            reasons.append("颈线已跌破，技术派资金可能出逃")
+        if position < 0.25:
+            score += 2
+        elif position > 0.85:
+            score -= 2
+        return score
+
+    def _force_balance_score(self, force_balance: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+        """多空博弈子分（趋势博弈分析框架：九地形态/抢帽子/筹码锁定）"""
+        if not force_balance:
+            return 0
+        score = 0
+        acc = force_balance.get("accumulation_evidence", 50)
+        chip = force_balance.get("chip_lock_likelihood", 50)
+        dist = force_balance.get("distribution_evidence", 50)
+        trap = force_balance.get("retail_trap_risk", 50)
+
+        if acc and acc >= 65:
+            score += 5
+            reasons.append(f"主力吸筹证据较强（{acc:.0f}）")
+        if chip and chip >= 65:
+            score += 4
+            reasons.append(f"筹码锁定可能性高（{chip:.0f}）：基石仓位")
+        if dist and dist >= 70:
+            score -= 6
+            reasons.append(f"主力派发证据较强（{dist:.0f}）")
+        if trap and trap >= 70:
+            score -= 5
+            risk_flags.append(f"散户陷阱风险高（{trap:.0f}）：疑似抢帽子游戏")
+            reasons.append("散户陷阱风险高，趋势博弈框架四问法审视")
+        elif trap and trap >= 60:
+            score -= 2
+        return score
+
+    def _timeframe_score(self, multi_timeframe: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+        """多时间框架子分（趋势博弈分析框架：大小级别交叉印证）"""
+        if not multi_timeframe:
+            return 0
+        score = 0
+        alignment = multi_timeframe.get("alignment", "")
+        higher_signal = multi_timeframe.get("higher_tf_signal", "")
+
+        if alignment == "三级别共振多头":
+            score += 6
+            reasons.append("日/周/月三级别共振多头")
+        elif alignment == "多级别一致多头":
+            score += 3
+            reasons.append("多级别一致多头")
+        elif alignment == "三级别共振空头":
+            score -= 6
+            reasons.append("日/周/月三级别共振空头")
+            risk_flags.append("三级别共振空头，趋势确认向下")
+        elif alignment == "多级别一致空头":
+            score -= 3
+        elif alignment == "日线与周线矛盾":
+            score -= 4
+            reasons.append("日线与周线矛盾，可能处于节奏切换期")
+
+        if "可支撑日线回踩" in higher_signal or "共振上行" in higher_signal:
+            reasons.append(higher_signal)
+        elif "压力" in higher_signal or "调整" in higher_signal:
+            risk_flags.append(higher_signal)
         return score
 
     def _price_quality_score(
