@@ -5,12 +5,20 @@ from .base import BaseAnalyzer
 from .fundamental import FundamentalAnalyzer
 from .wyckoff import WyckoffAnalyzer
 from .comprehensive import ComprehensiveAnalyzer
+from .dow_channel import DowChannelAnalyzer
+from .force_balance import ForceBalanceAnalyzer
+from .multi_timeframe import MultiTimeframeAnalyzer
+from .volume_profile import VolumeProfileAnalyzer
 
 
 # 分析器注册表
 ANALYZER_REGISTRY = {
     "fundamental": FundamentalAnalyzer,
     "wyckoff": WyckoffAnalyzer,
+    "dow_channel": DowChannelAnalyzer,
+    "volume_profile": VolumeProfileAnalyzer,
+    "multi_timeframe": MultiTimeframeAnalyzer,
+    "force_balance": ForceBalanceAnalyzer,
     "comprehensive": ComprehensiveAnalyzer,
 }
 

@@ -53,3 +53,15 @@ tmp_analysis/
 # data/
 .claude/
 .worktrees/
+
+# 本地临时/生成文件（勿提交）
+.env.bak*
+get-pip.py
+nul
+tmp_biomed_supply_chain.txt
+scripts/_pharma_chain_out/
+scripts/_portfolio_scan_out/
+.zcode/
+
+# 公网前端工程（独立管理，暂不入库）
+web/

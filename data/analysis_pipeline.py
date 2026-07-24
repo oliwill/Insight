@@ -296,6 +296,94 @@ def generate_analysis(code: str) -> Dict[str, Any]:
                     output['wyckoff_error'] = str(e)
                 except Exception as e:
                     output['wyckoff_error'] = f"Unexpected: {str(e)}"
+
+            # ===== 趋势博弈分析框架技术分析（成交量语言 / 道氏通道 / 多空博弈 / 多时间框架）=====
+            df_feed = df.reset_index()
+            fund_data = fund if fund else {}
+
+            # 成交量语言
+            try:
+                from analyzer.volume_profile import VolumeProfileAnalyzer
+                vp = VolumeProfileAnalyzer().analyze(df_feed, fund_data)
+                p = vp.details.get('profile')
+                if p:
+                    output['volume_profile'] = {
+                        'regime': p.regime,
+                        'vol_ratio': round(p.vol_contraction_ratio, 2),
+                        'price_vol_correlation': round(p.price_vol_correlation, 2),
+                        'price_change_20d_pct': round(p.price_change_20d_pct, 1),
+                        'is_volume_spike': p.is_volume_spike,
+                        'is_flat_volume_uptrend': p.is_flat_volume_uptrend,
+                        'spike_followed_by_decline': p.spike_followed_by_decline,
+                        'score': round(vp.score, 0),
+                    }
+                    output['volume_profile_signals'] = vp.signals[:4] if vp.signals else []
+                    output['volume_profile_risks'] = vp.risks[:4] if vp.risks else []
+            except Exception as e:
+                output['volume_profile_error'] = str(e)
+
+            # 道氏通道
+            try:
+                from analyzer.dow_channel import DowChannelAnalyzer
+                dc = DowChannelAnalyzer().analyze(df_feed, fund_data)
+                c = dc.details.get('channel')
+                if c:
+                    output['dow_channel'] = {
+                        'channel_direction': c.channel_direction,
+                        'upper_channel': round(c.upper_channel, 2),
+                        'lower_channel': round(c.lower_channel, 2),
+                        'channel_width_pct': round(c.channel_width_pct, 1),
+                        'position_in_channel': round(c.position_in_channel, 2),
+                        'slope_state': c.slope_state,
+                        'is_rubbing_upper': c.is_rubbing_upper,
+                        'is_rubbing_lower': c.is_rubbing_lower,
+                        'neckline_signal': c.neckline_signal,
+                        'top_bottom_signal': c.top_bottom_signal,
+                        'score': round(dc.score, 0),
+                    }
+                    output['dow_channel_signals'] = dc.signals[:4] if dc.signals else []
+                    output['dow_channel_risks'] = dc.risks[:4] if dc.risks else []
+            except Exception as e:
+                output['dow_channel_error'] = str(e)
+
+            # 多空博弈
+            try:
+                from analyzer.force_balance import ForceBalanceAnalyzer
+                fb = ForceBalanceAnalyzer().analyze(df_feed, fund_data)
+                f = fb.details.get('force_balance')
+                if f:
+                    output['force_balance'] = {
+                        'bull_bear_state': f.bull_bear_state,
+                        'accumulation_evidence': round(f.accumulation_evidence, 0),
+                        'distribution_evidence': round(f.distribution_evidence, 0),
+                        'chip_lock_likelihood': round(f.chip_lock_likelihood, 0),
+                        'retail_trap_risk': round(f.retail_trap_risk, 0),
+                        'score': round(fb.score, 0),
+                    }
+                    output['force_balance_signals'] = fb.signals[:4] if fb.signals else []
+                    output['force_balance_risks'] = fb.risks[:4] if fb.risks else []
+            except Exception as e:
+                output['force_balance_error'] = str(e)
+
+            # 多时间框架
+            try:
+                from analyzer.multi_timeframe import MultiTimeframeAnalyzer
+                mt = MultiTimeframeAnalyzer().analyze(df_feed, fund_data)
+                m = mt.details.get('view')
+                if m:
+                    output['multi_timeframe'] = {
+                        'daily_trend': m.daily_trend,
+                        'weekly_trend': m.weekly_trend,
+                        'monthly_trend': m.monthly_trend,
+                        'alignment': m.alignment,
+                        'consistency_score': round(m.consistency_score, 0),
+                        'higher_tf_signal': m.higher_tf_signal,
+                        'score': round(mt.score, 0),
+                    }
+                    output['multi_timeframe_signals'] = mt.signals[:4] if mt.signals else []
+                    output['multi_timeframe_risks'] = mt.risks[:4] if mt.risks else []
+            except Exception as e:
+                output['multi_timeframe_error'] = str(e)
         else:
             output['kline_rows'] = 0
     except (FileNotFoundError, KeyError, ValueError, OSError) as e:
