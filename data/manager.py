@@ -5,6 +5,7 @@
 import os
 import sys
 import io
+from pathlib import Path
 import pandas as pd
 from typing import Any, List, Dict, Optional
 from dataclasses import dataclass
@@ -23,6 +24,32 @@ try:
 except ImportError:
     # python-dotenv is optional; callers without it must set env vars themselves.
     pass
+
+
+def _configure_yfinance_cache(cache_dir: Optional[Path] = None) -> Optional[Path]:
+    """Direct yfinance's SQLite caches to a project-writable location.
+
+    In sandboxed/portable Windows environments yfinance's per-user cache directory
+    may not be writable.  The cache must be configured before a ticker is fetched;
+    keeping it under ``tmp_analysis`` also ensures it remains generated local state.
+    """
+    raw_dir = cache_dir or os.getenv("YFINANCE_CACHE_DIR")
+    target = Path(raw_dir).expanduser() if raw_dir else Path(__file__).resolve().parents[1] / "tmp_analysis" / "yfinance_cache"
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        cache_module = getattr(yf, "cache", None)
+        setter = getattr(cache_module, "set_cache_location", None)
+        if not callable(setter):
+            logger.warning("yfinance cache configuration API is unavailable; using its default cache path")
+            return None
+        setter(str(target))
+        return target
+    except OSError as exc:
+        logger.warning(f"Unable to configure yfinance cache at {target}: {exc}")
+        return None
+
+
+YFINANCE_CACHE_DIR = _configure_yfinance_cache()
 
 
 @contextmanager
