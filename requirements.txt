@@ -11,3 +11,4 @@ croniter
 watchdog
 python-telegram-bot
 lxml
+akshare
