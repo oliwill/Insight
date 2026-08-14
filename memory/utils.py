@@ -7,7 +7,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 # 导入统一配置
 from config import Config
@@ -15,13 +15,18 @@ from config import Config
 
 # ========== 路径工具 ==========
 
-def _ensure_dirs() -> None:
-    """确保必要的目录存在"""
-    Config.get_wiki_dir().mkdir(parents=True, exist_ok=True)
-    Config.get_materials_dir().mkdir(parents=True, exist_ok=True)
+def _ensure_dirs(base_dir: Optional[Path] = None) -> None:
+    """确保必要的目录存在
+
+    Args:
+        base_dir: 用户级 vault 根目录；None → 使用 Config 全局路径
+    """
+    base = Path(base_dir) if base_dir else Config.WIKI_BASE_DIR
+    (base / Config.WIKI_SUBDIR).mkdir(parents=True, exist_ok=True)
+    (base / Config.MATERIALS_SUBDIR).mkdir(parents=True, exist_ok=True)
 
 
-def _stock_wiki_path(stock_code: str) -> Path:
+def _stock_wiki_path(stock_code: str, base_dir: Optional[Path] = None) -> Path:
     """
     获取股票 Wiki 文件路径
 
@@ -35,10 +40,11 @@ def _stock_wiki_path(stock_code: str) -> Path:
         将 . 和 / 都替换为 _，保持与 Obsidian 现有命名一致（如 AAPL_US.md）
     """
     filename = stock_code.replace('/', '_').replace('.', '_') + ".md"
-    return Config.get_wiki_dir() / filename
+    base = Path(base_dir) if base_dir else Config.WIKI_BASE_DIR
+    return (base / Config.WIKI_SUBDIR) / filename
 
 
-def _stock_materials_dir(stock_code: str) -> Path:
+def _stock_materials_dir(stock_code: str, base_dir: Optional[Path] = None) -> Path:
     """
     获取股票资料目录路径
 
@@ -49,7 +55,8 @@ def _stock_materials_dir(stock_code: str) -> Path:
         资料目录的完整路径
     """
     dirname = stock_code.replace('/', '_').replace('.', '_')
-    return Config.get_materials_dir() / dirname
+    base = Path(base_dir) if base_dir else Config.WIKI_BASE_DIR
+    return (base / Config.MATERIALS_SUBDIR) / dirname
 
 
 # ========== 时间工具 ==========

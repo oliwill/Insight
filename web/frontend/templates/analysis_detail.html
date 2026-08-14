@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ record.symbol }} 分析 · Insight{% endblock %}
+{% block content %}
+<div class="flex items-center gap-3 mb-4">
+  <h1 class="text-xl font-bold">{{ record.symbol }}</h1>
+  <span class="text-xs text-gray-400">{{ record.created_at }}</span>
+  <span class="text-sm">Research: <b>{{ "%.1f"|format(record.research_score or 0) }}</b></span>
+  <span class="text-sm">Timing: <b>{{ record.timing_state or '-' }}</b></span>
+  <a href="/stocks/{{ record.symbol }}" class="ml-auto text-sm text-blue-600">再次分析</a>
+</div>
+
+{% if record.llm_summary %}
+<div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+  <div class="font-semibold text-purple-800 mb-2">AI 解读</div>
+  <div class="text-sm text-gray-800 space-y-2">{{ record.llm_summary }}</div>
+</div>
+{% endif %}
+
+<div class="bg-white rounded-lg shadow p-4">
+  <div id="report-host" class="markdown-body"></div>
+  <script type="text/markdown" data-host="#report-host">{{ record.report_md }}</script>
+</div>
+{% endblock %}

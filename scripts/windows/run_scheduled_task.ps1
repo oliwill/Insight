@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("inbox", "review", "dashboard", "all")]
+    [ValidateSet("inbox", "review", "dashboard", "brief", "all")]
     [string]$Task,
 
     [string]$PythonExe = "python",
@@ -92,6 +92,12 @@ function Get-DashboardArgs {
     return $args
 }
 
+function Get-BriefArgs {
+    $args = @("scripts\daily_brief.py", "--json")
+    if ($Notify) { $args += "--notify" }
+    return $args
+}
+
 switch ($Task) {
     "inbox" {
         Invoke-TraderTask -Name "inbox" -Arguments (Get-InboxArgs)
@@ -102,9 +108,13 @@ switch ($Task) {
     "dashboard" {
         Invoke-TraderTask -Name "dashboard" -Arguments (Get-DashboardArgs)
     }
+    "brief" {
+        Invoke-TraderTask -Name "brief" -Arguments (Get-BriefArgs)
+    }
     "all" {
         Invoke-TraderTask -Name "inbox" -Arguments (Get-InboxArgs)
         Invoke-TraderTask -Name "review" -Arguments (Get-ReviewArgs)
         Invoke-TraderTask -Name "dashboard" -Arguments (Get-DashboardArgs)
+        Invoke-TraderTask -Name "brief" -Arguments (Get-BriefArgs)
     }
 }

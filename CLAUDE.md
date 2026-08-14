@@ -85,7 +85,7 @@ When the user asks to analyze a stock, use this sequence unless they explicitly 
    - **Explicit-only**: used only when the user asks for that workflow; do not auto-invoke during normal stock analysis.
 
    | Canonical skill | Group | Policy | Purpose | When |
-   |---|---|---|---|---|
+   | --- | --- | --- | --- | --- |
    | `yfinance-data` | market-analysis | Conditional | prices, financial statements, options chains, dividends, earnings, analyst recommendations | use when local project data is missing, stale, inconsistent, or needs Yahoo-specific ownership / recommendation / options detail |
    | `funda-data` | data-providers | Baseline | analyst-grade research, filings, transcripts, options flow/GEX, insider/congressional trading, supply chain | every full stock analysis; required when any of these data gaps can change the thesis |
    | `company-valuation` | market-analysis | Baseline | DCF + relative + SOTP triangulation, WACC sensitivity, Bull/Base/Bear implied price | every comprehensive report with fair value, target price, or over/undervalued conclusion |
@@ -162,7 +162,7 @@ It performs:
 Do not conflate these two:
 
 | Layer | Question | Output |
-|---|---|---|
+| --- | --- | --- |
 | Research Score | Is the company/thesis worth owning? | 0–100 five-dimension score |
 | Timing State | Is now a good entry? | `Ready`, `Wait`, `Watch`, `Avoid` |
 
@@ -174,10 +174,10 @@ A low Research Score with `Ready` technicals should not become a high-conviction
 `analyzer.research_score.ResearchScoreEngine` uses:
 
 | Dimension | Weight | Main inputs |
-|---|---:|---|
-| 行业/TAM | 20% | sector, industry, peers, social/prediction-market attention, `supply_chain` bottleneck exposure |
-| 护城河 | 20% | moat object, gross margin, ROE, peer context, supply-chain scarcity/certification barrier |
-| 增长质量 | 20% | revenue growth, earnings growth, gross margin, FCF, supply-chain demand pressure |
+| --- | ---: | --- |
+| 行业/TAM | 20% | sector, industry, peers, social/prediction-market attention, `supply_chain` bottleneck exposure (evidence only) |
+| 护城河 | 20% | moat object, gross margin, ROE, peer context, supply-chain scarcity/certification barrier (score-bearing) |
+| 增长质量 | 20% | revenue growth, earnings growth, gross margin, FCF, supply-chain demand pressure (evidence only) |
 | 估值 | 25% | P/S, PSG, forward PE, analyst target, peers |
 | 团队/治理 | 15% | insider ownership/signal, SBC ratio |
 
@@ -275,7 +275,7 @@ earnings_date: "{YYYY-MM-DD}"
 ## Symbol Normalization
 
 | Input | Normalized | Market |
-|---|---|---|
+| --- | --- | --- |
 | `AAPL` | `AAPL.US` | US |
 | `00700` | `00700.HK` | HK |
 | `603906` | `SH603906` | CN Shanghai |
@@ -338,7 +338,7 @@ Resources:
 ## Common Failure Modes
 
 | Error | Cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | `WIKI_BASE_DIR is required` | `.env` missing or empty | copy `.env.example` to `.env` and fill paths |
 | Analysis not visible in Obsidian | wrong wiki path or duplicate filename | use `Config.get_wiki_dir()` and underscore filename rule |
 | `ModuleNotFoundError: longbridge` | optional SDK missing | install requirements or rely on Yahoo fallback where possible |

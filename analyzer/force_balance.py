@@ -8,6 +8,7 @@
 - 引友杀敌：突破阻力后回落（假突破）
 采用"可观测代理变量"映射趋势博弈分析框架的定性概念。
 """
+
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Any
@@ -27,6 +28,7 @@ from data.constants import (
 @dataclass
 class ForceBalance:
     """多空博弈分析结果"""
+
     bull_bear_state: str = "僵持(散地)"
     accumulation_evidence: float = 50.0
     distribution_evidence: float = 50.0
@@ -82,27 +84,38 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
     def _prepare_data(self, data: pd.DataFrame) -> pd.DataFrame:
         df = data.copy()
         column_mapping = {
-            'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close',
-            'Volume': 'volume', 'Date': 'date', 'Datetime': 'date',
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+            "Date": "date",
+            "Datetime": "date",
         }
-        df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.sort_values('date').reset_index(drop=True)
+        df = df.rename(
+            columns={k: v for k, v in column_mapping.items() if k in df.columns}
+        )
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.sort_values("date").reset_index(drop=True)
         for col in ("open", "high", "low", "close", "volume"):
             if col in df.columns:
                 df[col] = df[col].astype(float)
         return df
 
-    def _assess_force_balance(self, df: pd.DataFrame, fundamentals: Dict) -> ForceBalance:
-        close = df['close']
-        high = df['high']
-        low = df['low']
-        volume = df['volume']
+    def _assess_force_balance(
+        self, df: pd.DataFrame, fundamentals: Dict
+    ) -> ForceBalance:
+        close = df["close"]
+        high = df["high"]
+        low = df["low"]
+        volume = df["volume"]
         n = len(df)
         current_price = float(close.iloc[-1])
 
-        market_cap = fundamentals.get("market_cap") or fundamentals.get("marketCap") or 0
+        market_cap = (
+            fundamentals.get("market_cap") or fundamentals.get("marketCap") or 0
+        )
         is_small_cap = 0 < market_cap < FORCE_SMALL_CAP_THRESHOLD
 
         # === 主力吸筹证据（重地）===
@@ -114,8 +127,8 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
         recent = df.tail(VOLUME_MID_PERIOD)
         long_lower_shadows = 0
         for _, row in recent.iterrows():
-            body = abs(row['close'] - row['open'])
-            lower_shadow = min(row['open'], row['close']) - row['low']
+            body = abs(row["close"] - row["open"])
+            lower_shadow = min(row["open"], row["close"]) - row["low"]
             if body > 0 and lower_shadow > FORCE_LONG_SHADOW_RATIO * body:
                 long_lower_shadows += 1
         if long_lower_shadows >= 3:
@@ -139,7 +152,11 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
         if high_vol_mask.any():
             for idx in recent_vol[high_vol_mask.fillna(False)].index:
                 pos = df.index.get_loc(idx)
-                day_return = abs((close.iloc[pos] / close.iloc[pos - 1] - 1) * 100) if pos > 0 else 0
+                day_return = (
+                    abs((close.iloc[pos] / close.iloc[pos - 1] - 1) * 100)
+                    if pos > 0
+                    else 0
+                )
                 if day_return < 1.0:
                     high_vol_stall = True
                     break
@@ -147,16 +164,21 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
             dist += 15
         long_upper_shadows = 0
         for _, row in recent.iterrows():
-            body = abs(row['close'] - row['open'])
-            upper_shadow = row['high'] - max(row['open'], row['close'])
+            body = abs(row["close"] - row["open"])
+            upper_shadow = row["high"] - max(row["open"], row["close"])
             if body > 0 and upper_shadow > FORCE_UPPER_SHADOW_RATIO * body:
                 long_upper_shadows += 1
         if long_upper_shadows >= 3:
             dist += 12
         elif long_upper_shadows >= 1:
             dist += 4
-        if n >= 60 and current_price > float(close.tail(60).mean()) * 1.10:
-            dist += 8
+        # 高于 60 日均价 10% 本身不是派发证据（强势股常态）；只有同时跌破 20 日均价
+        # （高位滞涨/动能转弱）才计为派发信号，避免把趋势强势误判为出货。
+        if n >= 60:
+            ma60 = float(close.tail(60).mean())
+            ma20 = float(close.tail(VOLUME_MID_PERIOD).mean())
+            if current_price > ma60 * 1.10 and current_price < ma20:
+                dist += 8
         dist = min(100.0, dist)
 
         # === 筹码锁定可能性 ===
@@ -216,13 +238,21 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
 
     def _populate_signals(self, fb: ForceBalance) -> None:
         if fb.accumulation_evidence >= 65:
-            fb.signals.append(f"主力吸筹证据较强（{fb.accumulation_evidence:.0f}）：底部缩量+长下影线+低点抬高")
+            fb.signals.append(
+                f"主力吸筹证据较强（{fb.accumulation_evidence:.0f}）：底部缩量+长下影线+低点抬高"
+            )
         if fb.chip_lock_likelihood >= 65:
-            fb.signals.append(f"筹码锁定可能性高（{fb.chip_lock_likelihood:.0f}）：平量推升=基石仓位，趋势博弈框架下的最优质走法")
+            fb.signals.append(
+                f"筹码锁定可能性高（{fb.chip_lock_likelihood:.0f}）：平量推升=基石仓位，趋势博弈框架下的最优质走法"
+            )
         if fb.distribution_evidence >= 65:
-            fb.risks.append(f"主力派发证据较强（{fb.distribution_evidence:.0f}）：高位爆量滞涨+上影线")
+            fb.risks.append(
+                f"主力派发证据较强（{fb.distribution_evidence:.0f}）：高位爆量滞涨+上影线"
+            )
         if fb.retail_trap_risk >= 65:
-            fb.risks.append(f"散户陷阱风险高（{fb.retail_trap_risk:.0f}）：疑似抢帽子游戏，趋势博弈框架四问法审视")
+            fb.risks.append(
+                f"散户陷阱风险高（{fb.retail_trap_risk:.0f}）：疑似抢帽子游戏，趋势博弈框架四问法审视"
+            )
 
     def _calculate_score(self, fb: ForceBalance) -> float:
         score = 50.0
@@ -244,4 +274,3 @@ class ForceBalanceAnalyzer(BaseAnalyzer):
             f"吸筹{fb.accumulation_evidence:.0f} 派发{fb.distribution_evidence:.0f} "
             f"锁定{fb.chip_lock_likelihood:.0f} 陷阱{fb.retail_trap_risk:.0f}"
         )
-

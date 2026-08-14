@@ -1,0 +1,16 @@
+<tr id="job-{{ job.id }}"
+    {% if job.status in ('pending', 'running') %}
+    hx-get="/jobs/{{ job.id }}" hx-trigger="load delay:2s"
+    hx-target="#job-{{ job.id }}" hx-swap="outerHTML"
+    {% endif %}>
+  <td class="p-3">{{ job.id }}</td>
+  <td class="p-3">{{ job.symbol }}</td>
+  <td class="p-3">
+    {% if job.status == 'pending' %}<span class="text-yellow-600">排队中</span>
+    {% elif job.status == 'running' %}<span class="text-blue-600">分析中</span>
+    {% elif job.status == 'succeeded' %}<span class="text-green-600">完成</span>
+    {% else %}<span class="text-red-600">失败</span>{% endif %}
+  </td>
+  <td class="p-3 text-red-600">{{ job.error or '' }}</td>
+  <td class="p-3 text-gray-400">{{ job.created_at }}</td>
+</tr>

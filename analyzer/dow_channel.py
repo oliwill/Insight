@@ -6,6 +6,7 @@
 - 顶/底三步信号：出轨→颈线→通道下沿（顶）；通道破→缩量筑底→上破回踩（底）
 - 颈线 = 交地/衢地：颈线得失是趋势确认关键
 """
+
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Any
@@ -26,6 +27,7 @@ from data.constants import (
 @dataclass
 class DowChannel:
     """道氏通道分析结果"""
+
     channel_direction: str = "不明"
     upper_channel: float = 0.0
     lower_channel: float = 0.0
@@ -91,13 +93,20 @@ class DowChannelAnalyzer(BaseAnalyzer):
     def _prepare_data(self, data: pd.DataFrame) -> pd.DataFrame:
         df = data.copy()
         column_mapping = {
-            'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close',
-            'Volume': 'volume', 'Date': 'date', 'Datetime': 'date',
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+            "Date": "date",
+            "Datetime": "date",
         }
-        df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.sort_values('date').reset_index(drop=True)
+        df = df.rename(
+            columns={k: v for k, v in column_mapping.items() if k in df.columns}
+        )
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.sort_values("date").reset_index(drop=True)
         for col in ("open", "high", "low", "close", "volume"):
             if col in df.columns:
                 df[col] = df[col].astype(float)
@@ -106,13 +115,13 @@ class DowChannelAnalyzer(BaseAnalyzer):
     def _identify_channel(self, df: pd.DataFrame) -> DowChannel:
         lookback = min(CHANNEL_LOOKBACK_DAYS, len(df))
         window = df.tail(lookback).reset_index(drop=True)
-        close = window['close']
+        close = window["close"]
         current_price = float(close.iloc[-1])
 
         bound_lookback = min(20, len(window))
         recent_window = window.tail(bound_lookback)
-        upper_end = float(recent_window['high'].max())
-        lower_end = float(recent_window['low'].min())
+        upper_end = float(recent_window["high"].max())
+        lower_end = float(recent_window["low"].min())
         if lower_end >= upper_end:
             spread = max(current_price * 0.02, 0.01)
             upper_end = current_price + spread
@@ -130,14 +139,20 @@ class DowChannelAnalyzer(BaseAnalyzer):
         else:
             direction = "横盘"
 
-        channel_width_pct = (upper_end - lower_end) / avg_price * 100 if avg_price > 0 else 0.0
+        channel_width_pct = (
+            (upper_end - lower_end) / avg_price * 100 if avg_price > 0 else 0.0
+        )
         position = (current_price - lower_end) / (upper_end - lower_end)
         position = float(max(0.0, min(1.0, position)))
 
         slope_state = self._assess_slope(window, direction)
-        rubbing_upper, rubbing_lower = self._detect_rubbing(window, upper_end, lower_end)
+        rubbing_upper, rubbing_lower = self._detect_rubbing(
+            window, upper_end, lower_end
+        )
         neckline_signal = self._assess_neckline(window)
-        top_bottom_signal = self._detect_top_bottom(window, direction, position)
+        top_bottom_signal = self._detect_top_bottom(
+            window, direction, position, neckline_signal, slope_state
+        )
 
         channel = DowChannel(
             channel_direction=direction,
@@ -169,7 +184,7 @@ class DowChannelAnalyzer(BaseAnalyzer):
         return slope, intercept
 
     def _assess_slope(self, window: pd.DataFrame, direction: str) -> str:
-        close = window['close']
+        close = window["close"]
         n = len(window)
         recent_n = min(CHANNEL_SLOPE_RECENT_DAYS, n)
         base_n = min(CHANNEL_SLOPE_BASELINE_DAYS, n)
@@ -187,12 +202,18 @@ class DowChannelAnalyzer(BaseAnalyzer):
             return "稳定"
 
         if direction == "下降":
-            slowdown = abs(recent_slope) / abs(base_slope) if abs(base_slope) > 0 else 1.0
+            slowdown = (
+                abs(recent_slope) / abs(base_slope) if abs(base_slope) > 0 else 1.0
+            )
             if slowdown < (1 - CHANNEL_SLOPE_SLOWDOWN_THRESHOLD):
-                return "趋缓(扶老太太下楼)"
+                # 下降斜率趋缓 = 下跌动能衰竭。它只是「不再加速下跌」，本身不构成吸筹证据，
+                # 只有叠加低位/缩量等确认后才可视为潜在底部（见 _detect_top_bottom）。
+                return "趋缓(下跌动能衰竭)"
 
         if base_slope != 0 and abs(recent_slope) > abs(base_slope) * 1.5:
-            if (recent_slope > 0) == (base_slope > 0) and abs(recent_slope / (close.iloc[-1] or 1)) > 0.001:
+            if (recent_slope > 0) == (base_slope > 0) and abs(
+                recent_slope / (close.iloc[-1] or 1)
+            ) > 0.001:
                 return "加速"
 
         if abs(recent_slope) < abs(base_slope) * 0.3 and abs(base_slope) > 0:
@@ -200,7 +221,9 @@ class DowChannelAnalyzer(BaseAnalyzer):
 
         return "稳定"
 
-    def _detect_rubbing(self, window: pd.DataFrame, upper: float, lower: float) -> tuple:
+    def _detect_rubbing(
+        self, window: pd.DataFrame, upper: float, lower: float
+    ) -> tuple:
         lookback = min(CHANNEL_RUBBING_LOOKBACK, len(window))
         recent = window.tail(lookback)
         tolerance = (upper - lower) * 0.02 if upper > lower else 0.0
@@ -208,9 +231,9 @@ class DowChannelAnalyzer(BaseAnalyzer):
         upper_touches = 0
         lower_touches = 0
         for _, row in recent.iterrows():
-            if row['high'] >= upper - tolerance and row['close'] < upper:
+            if row["high"] >= upper - tolerance and row["close"] < upper:
                 upper_touches += 1
-            if row['low'] <= lower + tolerance and row['close'] > lower:
+            if row["low"] <= lower + tolerance and row["close"] > lower:
                 lower_touches += 1
 
         return (
@@ -220,14 +243,18 @@ class DowChannelAnalyzer(BaseAnalyzer):
 
     def _assess_neckline(self, window: pd.DataFrame) -> str:
         box = window.tail(min(30, len(window)))
-        box_high = float(box['high'].quantile(0.8))
-        box_low = float(box['low'].quantile(0.2))
-        box_range_ratio = (box_high - box_low) / box['close'].mean() if box['close'].mean() > 0 else 1.0
+        box_high = float(box["high"].quantile(0.8))
+        box_low = float(box["low"].quantile(0.2))
+        box_range_ratio = (
+            (box_high - box_low) / box["close"].mean()
+            if box["close"].mean() > 0
+            else 1.0
+        )
 
         if box_range_ratio > CHANNEL_RANGE_RATIO_THRESHOLD * 2:
             return "无"
 
-        current = float(window['close'].iloc[-1])
+        current = float(window["close"].iloc[-1])
         if current > box_high * 1.01:
             return "颈线已突破"
         elif current < box_low * 0.99:
@@ -236,21 +263,50 @@ class DowChannelAnalyzer(BaseAnalyzer):
             return "颈线争夺中"
         return "无"
 
-    def _detect_top_bottom(self, window: pd.DataFrame, direction: str, position: float) -> str:
-        if direction == "上升" and position > 0.95:
-            return "顶部三步信号"
+    def _detect_top_bottom(
+        self,
+        window: pd.DataFrame,
+        direction: str,
+        position: float,
+        neckline_signal: str,
+        slope_state: str,
+    ) -> str:
+        """顶/底信号需要确认条件，避免把健康的趋势极值误判为反转。
+
+        - 顶部：上升通道中仅仅贴近上沿（position>0.95）是强势股常态，只能算「出轨警示」；
+          必须跌破颈线（出轨→颈线破位）才构成「顶部三步信号」。
+        - 底部：下降通道低位 + 斜率趋缓（下跌动能衰竭）才构成「底部三步信号」；
+          仅有低位没有减速，只是「下跌减速观察」，不接飞刀。
+        """
+        if direction == "上升":
+            if neckline_signal == "颈线已跌破":
+                return "顶部三步信号"
+            if position > 0.95:
+                return "顶部出轨警示"
         if direction == "下降":
             if position < 0.30:
-                return "底部三步信号"
+                if "趋缓" in slope_state:
+                    return "底部三步信号"
+                return "下跌减速观察"
         return "无"
 
     def _populate_signals(self, channel: DowChannel, df: pd.DataFrame) -> None:
         if channel.top_bottom_signal == "顶部三步信号":
-            channel.risks.append("顶部三步信号：出轨→颈线→通道下沿，注意止盈")
+            channel.risks.append("顶部三步信号确认：出轨后跌破颈线，注意止盈")
+        elif channel.top_bottom_signal == "顶部出轨警示":
+            channel.risks.append(
+                "顶部出轨警示：价格贴上通道上沿，警惕假突破回落（未确认顶部）"
+            )
         if channel.top_bottom_signal == "底部三步信号":
-            channel.signals.append("底部三步信号：下降通道趋缓+筑底，潜在反转（切忌心急）")
-        if channel.slope_state == "趋缓(扶老太太下楼)":
-            channel.signals.append("斜率趋缓（扶老太太下楼）：主力温和吸筹，值得重点关注")
+            channel.signals.append(
+                "底部三步信号：下降趋缓+低位筑底，潜在反转（切忌心急）"
+            )
+        elif channel.top_bottom_signal == "下跌减速观察":
+            channel.signals.append(
+                "下跌减速观察：仍在下降通道低位，等待斜率趋缓/缩量确认"
+            )
+        if "趋缓" in channel.slope_state:
+            channel.signals.append("斜率趋缓：下跌动能衰竭，需底部结构确认后才可行动")
         if channel.is_rubbing_upper:
             channel.risks.append("摩擦上沿：多次触碰上沿未突破，多方力量外强中干")
         if channel.is_rubbing_lower:
@@ -269,15 +325,19 @@ class DowChannelAnalyzer(BaseAnalyzer):
         elif c.channel_direction == "下降":
             score -= 8
 
-        if c.slope_state == "趋缓(扶老太太下楼)":
-            score += 8
+        if "趋缓" in c.slope_state:
+            score += 2
         elif c.slope_state == "加速" and c.channel_direction == "上升":
             score += 4
 
         if c.top_bottom_signal == "底部三步信号":
             score += 10
+        elif c.top_bottom_signal == "下跌减速观察":
+            score += 1
         elif c.top_bottom_signal == "顶部三步信号":
             score -= 12
+        elif c.top_bottom_signal == "顶部出轨警示":
+            score -= 3
 
         if c.is_rubbing_lower:
             score += 4

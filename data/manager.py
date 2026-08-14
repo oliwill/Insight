@@ -2,9 +2,13 @@
 数据管理器 - 统一数据接入层
 数据源: 长桥API (美股/港股) + Yahoo Finance (备用/基本面)
 """
+
 import os
 import sys
 import io
+import json
+import shutil
+import subprocess
 from pathlib import Path
 import pandas as pd
 from typing import Any, List, Dict, Optional
@@ -34,13 +38,19 @@ def _configure_yfinance_cache(cache_dir: Optional[Path] = None) -> Optional[Path
     keeping it under ``tmp_analysis`` also ensures it remains generated local state.
     """
     raw_dir = cache_dir or os.getenv("YFINANCE_CACHE_DIR")
-    target = Path(raw_dir).expanduser() if raw_dir else Path(__file__).resolve().parents[1] / "tmp_analysis" / "yfinance_cache"
+    target = (
+        Path(raw_dir).expanduser()
+        if raw_dir
+        else Path(__file__).resolve().parents[1] / "tmp_analysis" / "yfinance_cache"
+    )
     try:
         target.mkdir(parents=True, exist_ok=True)
         cache_module = getattr(yf, "cache", None)
         setter = getattr(cache_module, "set_cache_location", None)
         if not callable(setter):
-            logger.warning("yfinance cache configuration API is unavailable; using its default cache path")
+            logger.warning(
+                "yfinance cache configuration API is unavailable; using its default cache path"
+            )
             return None
         setter(str(target))
         return target
@@ -83,12 +93,14 @@ def suppress_stdout():
         # Restore Python's sys.stdout after the file descriptor is restored.
         sys.stdout = old_stdout
 
+
 # 长桥SDK - lazy import to avoid debug output during module load
 LONGBRIDGE_AVAILABLE = False
 Config = None
 QuoteContext = None
 AdjustType = None
 Period = None
+
 
 def _import_longbridge():
     """Lazy import Longbridge SDK with stdout suppression"""
@@ -98,7 +110,12 @@ def _import_longbridge():
 
     try:
         with suppress_stdout():
-            from longbridge.openapi import Config as _Config, QuoteContext as _QuoteContext, AdjustType as _AdjustType, Period as _Period
+            from longbridge.openapi import (
+                Config as _Config,
+                QuoteContext as _QuoteContext,
+                AdjustType as _AdjustType,
+                Period as _Period,
+            )
         Config = _Config
         QuoteContext = _QuoteContext
         AdjustType = _AdjustType
@@ -106,12 +123,15 @@ def _import_longbridge():
         LONGBRIDGE_AVAILABLE = True
     except ImportError as e:
         LONGBRIDGE_AVAILABLE = False
-        logger.warning(f"longbridge SDK not installed ({e}), falling back to Yahoo Finance")
+        logger.warning(
+            f"longbridge SDK not installed ({e}), falling back to Yahoo Finance"
+        )
 
 
 @dataclass
 class StockInfo:
     """股票信息"""
+
     code: str
     name: str
     market: str  # 'US' | 'HK'
@@ -145,11 +165,26 @@ class DataSourceAttempt:
 
 
 class LongBridgeClient:
-    """长桥API客户端"""
+    """长桥API客户端
+
+    两条数据通道，均复用同一对外接口（get_quote/get_history/get_static_info）：
+      1. SDK 通道：.env 三件套 → Config.from_apikey + QuoteContext（更快，无 subprocess 开销）
+      2. CLI 通道：longbridge CLI 的 OAuth token（`longbridge auth login` 登录后存于本地）
+         适用于 SDK 三件套缺失/失效，或需要 CLI 独有覆盖（如 A 股基金 LOF/ETF）的场景。
+
+    每个查询方法内部 SDK 优先，SDK 不可用或失败时自动降级到 CLI。is_available() 在
+    任一通道可用时即返回 True，保证鸭子类型调用方（DataManager）无需感知底层差异。
+    """
+
+    # subprocess 超时（秒）。quote/static 很快；kline 历史可能稍慢，调用处可覆盖。
+    _CLI_TIMEOUT = 20
 
     def __init__(self):
         self.quote_ctx = None
+        self._cli_bin: Optional[str] = None  # longbridge 可执行文件路径，None=未找到
+        self._cli_checked: bool = False  # 是否已完成 CLI 探活
         self._init_client()
+        self._init_cli()
 
     def _init_client(self):
         # Lazy import to suppress debug output
@@ -174,111 +209,324 @@ class LongBridgeClient:
             logger.error(f"Longbridge init failed: {e}")
             self.quote_ctx = None
 
+    # ---------- CLI 通道 ----------
+
+    def _init_cli(self) -> None:
+        """探活 longbridge CLI：定位可执行文件即可，不在此发起网络请求。
+
+        真正的认证/可用性在首次实际查询时由 CLI 自身处理（token 过期会自动 refresh）。
+        这样避免每次实例化都产生 subprocess + 网络开销。
+        """
+        if self._cli_checked:
+            return
+        self._cli_checked = True
+        self._cli_bin = shutil.which("longbridge")
+        if self._cli_bin:
+            logger.info("Longbridge CLI available (OAuth token fallback enabled)")
+        else:
+            logger.debug("Longbridge CLI not found on PATH; SDK-only mode")
+
     def is_available(self) -> bool:
-        return self.quote_ctx is not None
+        return self.quote_ctx is not None or self._cli_bin is not None
+
+    # ---------- CLI 底层辅助 ----------
+
+    @staticmethod
+    def _cli_symbol(symbol: str) -> str:
+        """内部长桥代码 → CLI 代码格式。
+
+        SDK/内部: SH603906 / SZ161725 / AAPL.US / 00700.HK
+        CLI     : 603906.SH / 161725.SZ / AAPL.US / 00700.HK
+        （仅 A 股的 SH/SZ 前缀需要反转后缀；US/HK 两种格式一致）
+        """
+        if symbol.startswith("SH"):
+            return f"{symbol[2:]}.SH"
+        if symbol.startswith("SZ"):
+            return f"{symbol[2:]}.SZ"
+        return symbol
+
+    def _cli_call(
+        self, args: List[str], timeout: Optional[int] = None
+    ) -> Optional[Any]:
+        """执行 longbridge CLI 子命令，返回解析后的 JSON。
+
+        - 复用 CLI 已登录的 OAuth token（无需三件套）。
+        - 任何失败（未安装/超时/非零退出/解析失败）都返回 None 并记录日志，由调用方降级。
+        - 强制 --format json，stderr 丢弃（CLI 可能在 stderr 打印更新提示等噪声）。
+        """
+        if not self._cli_bin:
+            return None
+        cmd = [self._cli_bin, *args, "--format", "json"]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout or self._CLI_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Longbridge CLI timeout: {' '.join(args)}")
+            return None
+        except Exception as e:
+            logger.warning(f"Longbridge CLI exec failed: {e}")
+            return None
+        if proc.returncode != 0:
+            # 非零退出：可能是认证过期、符号无效、权限不足等。stderr 含原因。
+            err = (proc.stderr or "").strip()
+            logger.warning(
+                f"Longbridge CLI nonzero exit for {' '.join(args)}: {err[:200]}"
+            )
+            return None
+        out = (proc.stdout or "").strip()
+        if not out:
+            return None
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Longbridge CLI JSON parse failed: {e}")
+            return None
+
+    @staticmethod
+    def _to_float(v: Any) -> Optional[float]:
+        """CLI 数值字段是字符串；转 float，空/None/'0' 风格按字面处理（0 是合法值）。"""
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _to_int(v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        try:
+            return int(float(v))
+        except (TypeError, ValueError):
+            return None
 
     # ---------- 行情 ----------
 
     def get_quote(self, symbol: str) -> Optional[Dict]:
-        """获取实时行情"""
+        """获取实时行情（SDK 优先，CLI 兜底）"""
         if not self.is_available():
             return None
-        try:
-            quotes = self.quote_ctx.quote([symbol])
-            if not quotes:
-                return None
-            q = quotes[0]
-            change_pct = 0.0
-            if q.prev_close and q.prev_close > 0:
-                change_pct = (q.last_done - q.prev_close) / q.prev_close * 100
-            return {
-                "symbol": q.symbol,
-                "price": q.last_done,
-                "open": q.open,
-                "high": q.high,
-                "low": q.low,
-                "prev_close": q.prev_close,
-                "volume": q.volume,
-                "turnover": q.turnover,
-                "change_pct": round(change_pct, 2),
-                "timestamp": str(q.timestamp),
-            }
-        except Exception as e:
-            logger.error(f"Longbridge quote failed for {symbol}: {e}")
+        # SDK 通道
+        if self.quote_ctx is not None:
+            try:
+                quotes = self.quote_ctx.quote([symbol])
+                if quotes:
+                    q = quotes[0]
+                    change_pct = 0.0
+                    if q.prev_close and q.prev_close > 0:
+                        change_pct = (q.last_done - q.prev_close) / q.prev_close * 100
+                    return {
+                        "symbol": q.symbol,
+                        "price": q.last_done,
+                        "open": q.open,
+                        "high": q.high,
+                        "low": q.low,
+                        "prev_close": q.prev_close,
+                        "volume": q.volume,
+                        "turnover": q.turnover,
+                        "change_pct": round(change_pct, 2),
+                        "timestamp": str(q.timestamp),
+                    }
+            except Exception as e:
+                logger.error(f"Longbridge quote failed for {symbol}: {e}")
+        # CLI 兜底
+        return self._cli_get_quote(symbol)
+
+    def _cli_get_quote(self, symbol: str) -> Optional[Dict]:
+        data = self._cli_call(["quote", self._cli_symbol(symbol)])
+        if not data or not isinstance(data, list) or not data:
             return None
+        q = data[0]
+        price = self._to_float(q.get("last"))
+        prev_close = self._to_float(q.get("prev_close"))
+        change_pct = self._to_float(q.get("change_percentage"))
+        if change_pct is None and price and prev_close and prev_close > 0:
+            change_pct = round((price - prev_close) / prev_close * 100, 2)
+        return {
+            "symbol": q.get("symbol", symbol),
+            "price": price,
+            "open": self._to_float(q.get("open")),
+            "high": self._to_float(q.get("high")),
+            "low": self._to_float(q.get("low")),
+            "prev_close": prev_close,
+            "volume": self._to_int(q.get("volume")),
+            "turnover": self._to_float(q.get("turnover")),
+            "change_pct": change_pct,
+            "timestamp": q.get("time"),
+        }
 
     # ---------- 历史K线 ----------
 
-    def get_history(
-        self, symbol: str, days: int = 365
-    ) -> Optional[pd.DataFrame]:
-        """获取历史K线（前复权）"""
+    def get_history(self, symbol: str, days: int = 365) -> Optional[pd.DataFrame]:
+        """获取历史K线（前复权；SDK 优先，CLI 兜底）"""
         if not self.is_available():
             return None
-        try:
-            end = datetime.now()
-            start = end - timedelta(days=days)
-            candles = self.quote_ctx.history_candlesticks_by_date(
-                symbol=symbol,
-                period=Period.Day,
-                adjust_type=AdjustType.ForwardAdjust,
-                start=start,
-                end=end,
-            )
-            if not candles:
-                return None
-            df = pd.DataFrame([
-                {
-                    "date": c.timestamp,
-                    "open": c.open,
-                    "high": c.high,
-                    "low": c.low,
-                    "close": c.close,
-                    "volume": c.volume,
-                }
-                for c in candles
-            ])
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.sort_values("date").reset_index(drop=True)
-            return df
-        except Exception as e:
-            logger.error(f"Longbridge history failed for {symbol}: {e}")
+        # SDK 通道
+        if self.quote_ctx is not None:
+            try:
+                end = datetime.now()
+                start = end - timedelta(days=days)
+                candles = self.quote_ctx.history_candlesticks_by_date(
+                    symbol=symbol,
+                    period=Period.Day,
+                    adjust_type=AdjustType.ForwardAdjust,
+                    start=start,
+                    end=end,
+                )
+                if candles:
+                    df = pd.DataFrame(
+                        [
+                            {
+                                "date": c.timestamp,
+                                "open": c.open,
+                                "high": c.high,
+                                "low": c.low,
+                                "close": c.close,
+                                "volume": c.volume,
+                            }
+                            for c in candles
+                        ]
+                    )
+                    df["date"] = pd.to_datetime(df["date"])
+                    df = df.sort_values("date").reset_index(drop=True)
+                    return df
+            except Exception as e:
+                logger.error(f"Longbridge history failed for {symbol}: {e}")
+        # CLI 兜底
+        return self._cli_get_history(symbol, days)
+
+    def _cli_get_history(self, symbol: str, days: int) -> Optional[pd.DataFrame]:
+        # CLI count 是根数；按 days 估算，留 20% 余量覆盖周末/假日
+        count = max(int(days * 1.2), 30)
+        data = self._cli_call(
+            [
+                "kline",
+                self._cli_symbol(symbol),
+                "--period",
+                "day",
+                "--count",
+                str(count),
+                "--adjust",
+                "forward",
+            ],
+            timeout=30,
+        )
+        if not data or not isinstance(data, list) or not data:
             return None
+        rows = []
+        for c in data:
+            if not c.get("time"):
+                continue
+            rows.append(
+                {
+                    "date": c.get("time"),
+                    "open": self._to_float(c.get("open")),
+                    "high": self._to_float(c.get("high")),
+                    "low": self._to_float(c.get("low")),
+                    "close": self._to_float(c.get("close")),
+                    "volume": self._to_int(c.get("volume")),
+                }
+            )
+        if not rows:
+            return None
+        df = pd.DataFrame(rows)
+        df["date"] = pd.to_datetime(df["date"])
+        # CLI 的 time 字段带时区（如 ...T16:00:00Z）；SDK 返回 tz-naive。
+        # 统一去掉时区，与 SDK 通道及下游（如 wyckoff_chart）保持一致。
+        try:
+            if getattr(df["date"].dt, "tz", None) is not None:
+                df["date"] = df["date"].dt.tz_localize(None)
+        except Exception:
+            pass
+        df = df.sort_values("date").reset_index(drop=True)
+        # 截断到请求的 days 窗口（CLI 按 count 返回，可能略多）
+        cutoff = datetime.now() - timedelta(days=days)
+        df = df[df["date"] >= pd.Timestamp(cutoff)].reset_index(drop=True)
+        return df
 
     # ---------- 静态信息 ----------
 
     def get_static_info(self, symbol: str) -> Optional[Dict]:
-        """获取股票静态信息（名称、行业等）"""
+        """获取股票静态信息（名称、行业等；SDK 优先，CLI 兜底）"""
         if not self.is_available():
             return None
-        try:
-            infos = self.quote_ctx.static_info([symbol])
-            if not infos:
-                return None
-            s = infos[0]
-            return {
-                "symbol": s.symbol,
-                "name_cn": s.name_cn,
-                "name_en": s.name_en,
-                "exchange": str(s.exchange),
-                "currency": s.currency,
-                "lot_size": s.lot_size,
-                "total_shares": s.total_shares,
-                "circulating_shares": s.circulating_shares,
-                "eps": s.eps,
-                "bps": s.bps,
-                "dividend_yield": s.dividend_yield,
-            }
-        except Exception as e:
-            logger.error(f"Longbridge static_info failed for {symbol}: {e}")
+        # SDK 通道
+        if self.quote_ctx is not None:
+            try:
+                infos = self.quote_ctx.static_info([symbol])
+                if infos:
+                    s = infos[0]
+                    return {
+                        "symbol": s.symbol,
+                        "name_cn": s.name_cn,
+                        "name_en": s.name_en,
+                        "exchange": str(s.exchange),
+                        "currency": s.currency,
+                        "lot_size": s.lot_size,
+                        "total_shares": s.total_shares,
+                        "circulating_shares": s.circulating_shares,
+                        "eps": s.eps,
+                        "bps": s.bps,
+                        "dividend_yield": s.dividend_yield,
+                    }
+            except Exception as e:
+                logger.error(f"Longbridge static_info failed for {symbol}: {e}")
+        # CLI 兜底
+        return self._cli_get_static_info(symbol)
+
+    def _cli_get_static_info(self, symbol: str) -> Optional[Dict]:
+        data = self._cli_call(["static", self._cli_symbol(symbol)])
+        if not data or not isinstance(data, list) or not data:
             return None
+        s = data[0]
+        # CLI static 的 `dividend` 字段是"每股股息(元)"，非股息率百分比。
+        # 用 calc-index 的 dps_rate 拿真实股息率；失败则用 quote 现价反推。
+        dividend_yield = self._cli_dividend_yield(symbol)
+        return {
+            "symbol": s.get("symbol", symbol),
+            "name_cn": s.get("name"),
+            "name_en": s.get("name_en") or s.get("name"),
+            "exchange": s.get("exchange"),
+            "currency": s.get("currency"),
+            "lot_size": self._to_int(s.get("lot_size")),
+            "total_shares": self._to_int(s.get("total_shares")),
+            # CLI 字段缩写：circ._shares
+            "circulating_shares": self._to_int(
+                s.get("circ._shares") or s.get("circulating_shares")
+            ),
+            "eps": self._to_float(s.get("eps_ttm") or s.get("eps")),
+            "bps": self._to_float(s.get("bps")),
+            "dividend_yield": dividend_yield,
+        }
+
+    def _cli_dividend_yield(self, symbol: str) -> Optional[float]:
+        """通过 calc-index dps_rate 取真实股息率（百分比）。失败返回 None。
+
+        calc-index 的 dps_rate 与现价反算一致（如茅台 3.82），
+        优于 static.dividend（那只是每股股息元值，会被误当成百分比）。
+        """
+        data = self._cli_call(
+            ["calc-index", self._cli_symbol(symbol), "--fields", "dps_rate"]
+        )
+        if not data or not isinstance(data, list) or not data:
+            return None
+        return self._to_float(data[0].get("dps_rate"))
 
 
 class DataManager:
     """数据管理器 - 长桥API优先，Yahoo Finance备用"""
 
-    def __init__(self, longbridge_client: Optional[LongBridgeClient] = None, yahoo_factory=None):
-        self.longbridge = longbridge_client if longbridge_client is not None else LongBridgeClient()
+    def __init__(
+        self, longbridge_client: Optional[LongBridgeClient] = None, yahoo_factory=None
+    ):
+        self.longbridge = (
+            longbridge_client if longbridge_client is not None else LongBridgeClient()
+        )
         self.yahoo_factory = yahoo_factory or yf.Ticker
         self._source_attempts: Dict[str, List[DataSourceAttempt]] = {}
         logger.info("DataManager initialized")
@@ -372,12 +620,18 @@ class DataManager:
             static = self.longbridge.get_static_info(symbol)
             if static:
                 quote = self.longbridge.get_quote(symbol)
-                results.append({
-                    "code": symbol,
-                    "name": static.get("name_cn") or static.get("name_en") or symbol,
-                    "market": "港股" if self.detect_market(symbol) == "HK" else "美股",
-                    "price": quote["price"] if quote else 0,
-                })
+                results.append(
+                    {
+                        "code": symbol,
+                        "name": static.get("name_cn")
+                        or static.get("name_en")
+                        or symbol,
+                        "market": "港股"
+                        if self.detect_market(symbol) == "HK"
+                        else "美股",
+                        "price": quote["price"] if quote else 0,
+                    }
+                )
 
         # Yahoo Finance 备用（美股用不带 .US 的代码）
         if not results:
@@ -386,12 +640,16 @@ class DataManager:
                 info = ticker.info
                 name = info.get("shortName") or info.get("longName") or symbol
                 if name and name != symbol:
-                    results.append({
-                        "code": symbol,
-                        "name": name,
-                        "market": "港股" if self.detect_market(symbol) == "HK" else "美股",
-                        "price": info.get("regularMarketPrice", 0),
-                    })
+                    results.append(
+                        {
+                            "code": symbol,
+                            "name": name,
+                            "market": "港股"
+                            if self.detect_market(symbol) == "HK"
+                            else "美股",
+                            "price": info.get("regularMarketPrice", 0),
+                        }
+                    )
             except Exception:
                 pass
 
@@ -416,7 +674,9 @@ class DataManager:
                     change_pct=quote["change_pct"],
                     currency={"HK": "HKD", "CN": "CNY"}.get(market, "USD"),
                 )
-            self._record_source_attempt("stock_info", "longbridge", "failed", "empty_or_failed")
+            self._record_source_attempt(
+                "stock_info", "longbridge", "failed", "empty_or_failed"
+            )
         else:
             self._record_source_attempt("stock_info", "longbridge", "unavailable")
 
@@ -424,11 +684,32 @@ class DataManager:
         info = self._get_yf_stock_info(symbol)
         status = "ok" if info and info.name != "Unknown" else "failed"
         detail = "" if status == "ok" else "empty_or_failed"
-        self._record_source_attempt("stock_info", "yahoo", status, detail, rows=1 if status == "ok" else 0)
+        self._record_source_attempt(
+            "stock_info", "yahoo", status, detail, rows=1 if status == "ok" else 0
+        )
         return info
 
-    def get_historical_data(self, code: str, period: str = "1y") -> Optional[pd.DataFrame]:
-        """获取历史行情"""
+    @staticmethod
+    def _cn_volume_to_shares(
+        df: Optional[pd.DataFrame], symbol: str
+    ) -> Optional[pd.DataFrame]:
+        """A 股行情数据源的成交量按「手」(1手=100股) 返回，统一为股。
+
+        交易所原始数据（Yahoo 与 Longbridge 均透传）对 SH/SZ 标的的 volume 字段是
+        手数，与美股/港股的「股」不一致；下游（成交额、换手率、流动性）按股计算，
+        故在此数据边界归一。US/HK 不受影响。
+        """
+        if df is None or df.empty or "volume" not in df.columns:
+            return df
+        if symbol.startswith("SH") or symbol.startswith("SZ"):
+            df = df.copy()
+            df["volume"] = df["volume"] * 100
+        return df
+
+    def get_historical_data(
+        self, code: str, period: str = "1y"
+    ) -> Optional[pd.DataFrame]:
+        """获取历史行情（A 股成交量统一为股）"""
         symbol = self.normalize_symbol(code)
         days_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "3y": 1095}
         days = days_map.get(period, 365)
@@ -437,9 +718,13 @@ class DataManager:
         if self.longbridge.is_available():
             df = self.longbridge.get_history(symbol, days)
             if df is not None and not df.empty:
-                self._record_source_attempt("historical_data", "longbridge", "ok", rows=len(df))
-                return df
-            self._record_source_attempt("historical_data", "longbridge", "failed", "empty_or_failed")
+                self._record_source_attempt(
+                    "historical_data", "longbridge", "ok", rows=len(df)
+                )
+                return self._cn_volume_to_shares(df, symbol)
+            self._record_source_attempt(
+                "historical_data", "longbridge", "failed", "empty_or_failed"
+            )
         else:
             self._record_source_attempt("historical_data", "longbridge", "unavailable")
 
@@ -447,9 +732,11 @@ class DataManager:
         df = self._get_yf_history(symbol, period)
         if df is not None and not df.empty:
             self._record_source_attempt("historical_data", "yahoo", "ok", rows=len(df))
-            return df
-        self._record_source_attempt("historical_data", "yahoo", "failed", "empty_or_failed")
-        return df
+            return self._cn_volume_to_shares(df, symbol)
+        self._record_source_attempt(
+            "historical_data", "yahoo", "failed", "empty_or_failed"
+        )
+        return self._cn_volume_to_shares(df, symbol)
 
     def get_fundamentals(self, code: str) -> Dict:
         """获取基本面数据：长桥 static_info 优先算 PE/PB，YF 补充其余字段"""
@@ -483,7 +770,9 @@ class DataManager:
                 if price and bps and float(bps) != 0:
                     result["pb"] = round(price / float(bps), 2)
                 if lb_data.get("total_shares") and price:
-                    result["market_cap"] = round(float(lb_data["total_shares"]) * price, 2)
+                    result["market_cap"] = round(
+                        float(lb_data["total_shares"]) * price, 2
+                    )
                 if lb_data.get("dividend_yield") is not None:
                     result["dividend_yield"] = lb_data["dividend_yield"]
                 if lb_data.get("total_shares"):
@@ -491,7 +780,9 @@ class DataManager:
                 if lb_data.get("circulating_shares"):
                     result["circulating_shares"] = lb_data["circulating_shares"]
             else:
-                self._record_source_attempt("fundamentals", "longbridge", "failed", "empty_or_failed")
+                self._record_source_attempt(
+                    "fundamentals", "longbridge", "failed", "empty_or_failed"
+                )
         else:
             self._record_source_attempt("fundamentals", "longbridge", "unavailable")
 
@@ -542,7 +833,9 @@ class DataManager:
             if info:
                 self._record_source_attempt("fundamentals", "yahoo", "ok", rows=1)
             else:
-                self._record_source_attempt("fundamentals", "yahoo", "failed", "empty_or_failed")
+                self._record_source_attempt(
+                    "fundamentals", "yahoo", "failed", "empty_or_failed"
+                )
         except Exception as e:
             logger.warning(f"YF fundamentals fallback failed for {symbol}: {e}")
             self._record_source_attempt("fundamentals", "yahoo", "failed", str(e))
@@ -591,7 +884,9 @@ class DataManager:
             ticker = self._get_yf_ticker(symbol)
             df = ticker.history(period=period)
             df = df.reset_index()
-            df.columns = [c.lower().replace(" ", "_").replace(".", "_") for c in df.columns]
+            df.columns = [
+                c.lower().replace(" ", "_").replace(".", "_") for c in df.columns
+            ]
             return df
         except Exception as e:
             logger.error(f"YF history failed: {e}")

@@ -15,6 +15,7 @@
     SCHEDULE_DASHBOARD=0 8 * * *         # 每天8:00更新Dashboard
     SCHEDULE_NOTIFY=true                 # 是否发送通知
 """
+
 import os
 import sys
 import time
@@ -29,6 +30,7 @@ try:
     from loguru import logger
 except ImportError:
     import logging
+
     logger = logging.getLogger("trader_scheduler")
     logger.setLevel(logging.INFO)
     if not logger.handlers:
@@ -42,9 +44,10 @@ LOG_FILE = Path("/tmp/trader-obsidian-scheduler.log")
 
 # 默认调度配置
 DEFAULT_SCHEDULE = {
-    "scan_inbox": "*/30 * * * *",      # 每30分钟
-    "review": "0 9 * * *",              # 每天9:00
-    "dashboard": "0 8 * * *",           # 每天8:00
+    "scan_inbox": "*/30 * * * *",  # 每30分钟
+    "review": "0 9 * * *",  # 每天9:00
+    "dashboard": "0 8 * * *",  # 每天8:00
+    "brief": "0 9 * * *",  # 每天9:00 每日关注简报
 }
 
 
@@ -52,7 +55,12 @@ def _task_arguments(script_name: str) -> list[str]:
     """Build stable arguments for scheduler-managed task scripts."""
     args: list[str] = []
 
-    if script_name in {"scan_inbox.py", "run_review.py", "update_dashboard.py"}:
+    if script_name in {
+        "scan_inbox.py",
+        "run_review.py",
+        "update_dashboard.py",
+        "daily_brief.py",
+    }:
         args.append("--json")
 
     if script_name == "update_dashboard.py":
@@ -124,6 +132,7 @@ class Scheduler:
             "scan_inbox": datetime.min,
             "review": datetime.min,
             "dashboard": datetime.min,
+            "brief": datetime.min,
         }
         self.sleep_interval = 60  # 每分钟检查一次
 
@@ -133,6 +142,7 @@ class Scheduler:
         logger.info(f"   Inbox扫描: {_get_schedule('scan_inbox')}")
         logger.info(f"   回测复盘: {_get_schedule('review')}")
         logger.info(f"   Dashboard: {_get_schedule('dashboard')}")
+        logger.info(f"   每日简报: {_get_schedule('brief')}")
 
         self.running = True
 
@@ -164,6 +174,11 @@ class Scheduler:
         if _should_run(_get_schedule("dashboard"), self.last_runs["dashboard"]):
             if run_task("update_dashboard.py"):
                 self.last_runs["dashboard"] = now
+
+        # 每日关注简报
+        if _should_run(_get_schedule("brief"), self.last_runs["brief"]):
+            if run_task("daily_brief.py"):
+                self.last_runs["brief"] = now
 
     def _handle_signal(self, signum, frame):
         """处理终止信号"""
