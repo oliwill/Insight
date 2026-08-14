@@ -134,13 +134,15 @@ def test_learn_from_history_counts_legacy_and_research_timeline_scores(tmp_path,
     )
     (wiki_dir / "index.md").write_text("# index\n", encoding="utf-8")
     (wiki_dir / "log.md").write_text("# log\n", encoding="utf-8")
-    monkeypatch.setattr(memory_manager, "WIKI_DIR", wiki_dir)
-    monkeypatch.setattr(memory_manager, "INDEX_PATH", wiki_dir / "index.md")
-    monkeypatch.setattr(memory_manager, "LOG_PATH", wiki_dir / "log.md")
+    monkeypatch.setattr(memory_manager.Config, "WIKI_BASE_DIR", tmp_path)
+    monkeypatch.setattr(memory_manager.Config, "WIKI_SUBDIR", "Analysis")
+    monkeypatch.setattr(memory_manager.Config, "MATERIALS_SUBDIR", "Materials")
     monkeypatch.setattr(
         memory_manager,
         "_stock_wiki_path",
-        lambda stock_code: wiki_dir / f"{stock_code.replace('.', '_').replace('/', '_')}.md",
+        lambda stock_code, base_dir=None: (Path(base_dir) if base_dir else tmp_path)
+        / "Analysis"
+        / f"{stock_code.replace('.', '_').replace('/', '_')}.md",
     )
 
     stats = memory_manager.MemoryManager().learn_from_history()

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Insight 股票分析{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script src="/static/app.js" defer></script>
+  <style>
+    .markdown-body table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+    .markdown-body th, .markdown-body td { border: 1px solid #e5e7eb; padding: 0.35rem 0.6rem; font-size: 0.85rem; }
+    .markdown-body h1 { font-size: 1.35rem; font-weight: 700; margin: 1rem 0 0.5rem; }
+    .markdown-body h2 { font-size: 1.15rem; font-weight: 700; margin: 1rem 0 0.4rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25rem; }
+    .markdown-body h3 { font-size: 1rem; font-weight: 600; margin: 0.75rem 0 0.3rem; }
+    .markdown-body p, .markdown-body li { font-size: 0.9rem; line-height: 1.6; }
+    .markdown-body img { max-width: 100%; border-radius: 0.5rem; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+<nav class="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-6 sticky top-0 z-10">
+  <a href="/watchlist" class="font-bold text-lg tracking-tight">Insight</a>
+  <a href="/watchlist" class="text-sm hover:text-blue-600">自选</a>
+  <a href="/timeline" class="text-sm hover:text-blue-600">追踪</a>
+  <a href="/jobs" class="text-sm hover:text-blue-600">任务</a>
+  <div class="ml-auto">
+    <form method="post" action="/auth/logout" class="inline">
+      <button class="text-sm text-gray-500 hover:text-gray-800">退出登录</button>
+    </form>
+  </div>
+</nav>
+<main class="max-w-5xl mx-auto px-4 py-6">
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -4,6 +4,7 @@ Trading timing engine for obsidiantrader.
 Produces a state machine for entry quality while keeping timing separate from
 the five-dimension research score.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,7 +24,9 @@ class TimingState:
 class TimingEngine:
     """Build Ready/Wait/Watch/Avoid timing state from market context."""
 
-    def analyze(self, market_data: Dict, research_score: Optional[float] = None) -> TimingState:
+    def analyze(
+        self, market_data: Dict, research_score: Optional[float] = None
+    ) -> TimingState:
         stock_info = market_data.get("stock_info", {}) or {}
         technicals = market_data.get("technicals", {}) or {}
         wyckoff = market_data.get("wyckoff", {}) or {}
@@ -43,17 +46,28 @@ class TimingEngine:
         entry_triggers: List[str] = []
         invalidation_triggers: List[str] = []
         risk_flags: List[str] = []
+        ccy = self._currency_symbol(stock_info)
 
         score += self._trend_score(technicals, reasons, entry_triggers)
-        score += self._wyckoff_score(wyckoff, reasons, entry_triggers, invalidation_triggers)
+        score += self._wyckoff_score(
+            wyckoff, reasons, entry_triggers, invalidation_triggers, ccy
+        )
         score += self._volume_score(volume_profile, reasons, risk_flags)
-        score += self._channel_score(dow_channel, reasons, entry_triggers, risk_flags)
-        score += self._force_balance_score(force_balance, reasons, risk_flags)
+        score += self._channel_score(
+            dow_channel, reasons, entry_triggers, risk_flags, ccy
+        )
+        score += self._force_balance_score(
+            force_balance, reasons, risk_flags, volume_profile.get("regime", "")
+        )
         score += self._timeframe_score(multi_timeframe, reasons, risk_flags)
-        score += self._price_quality_score(stock_info, technicals, fundamentals, reasons, entry_triggers)
+        score += self._price_quality_score(
+            stock_info, technicals, fundamentals, reasons, entry_triggers, ccy
+        )
         score += self._catalyst_score(earnings, reasons, risk_flags)
-        score += self._liquidity_score(liquidity, reasons, risk_flags)
-        score += self._sentiment_score(web_search, options, liquidity, reasons, risk_flags)
+        score += self._liquidity_score(liquidity, reasons, risk_flags, ccy)
+        score += self._sentiment_score(
+            web_search, options, liquidity, reasons, risk_flags
+        )
 
         if research_score is not None:
             if research_score >= 75:
@@ -71,7 +85,9 @@ class TimingEngine:
         if not invalidation_triggers:
             support = technicals.get("support_20d")
             if support:
-                invalidation_triggers.append(f"跌破 20 日支撑 ${support:.2f} 且放量")
+                invalidation_triggers.append(
+                    f"跌破 20 日支撑 {ccy}{support:.2f} 且放量"
+                )
             else:
                 invalidation_triggers.append("核心 thesis 被新事实证伪或风险收益转负")
 
@@ -84,7 +100,26 @@ class TimingEngine:
             risk_flags=risk_flags[:6],
         )
 
-    def _trend_score(self, technicals: Dict, reasons: List[str], entry_triggers: List[str]) -> int:
+    @staticmethod
+    def _currency_symbol(stock_info: Dict) -> str:
+        """按市场返回货币符号，避免 HK/CN 标的的价位显示成美元。
+
+        优先用 stock_info.currency；缺失或未知时按 code 后缀/前缀推断。
+        """
+        currency = str(stock_info.get("currency") or "").upper()
+        symbol = {"USD": "$", "HKD": "HK$", "CNY": "¥", "CNH": "¥"}.get(currency)
+        if symbol:
+            return symbol
+        code = str(stock_info.get("code") or "").upper()
+        if code.endswith(".HK"):
+            return "HK$"
+        if code.startswith(("SH", "SZ")):
+            return "¥"
+        return "$"
+
+    def _trend_score(
+        self, technicals: Dict, reasons: List[str], entry_triggers: List[str]
+    ) -> int:
         score = 0
         trend_short = technicals.get("trend_short")
         trend_mid = technicals.get("trend_mid")
@@ -131,10 +166,12 @@ class TimingEngine:
         reasons: List[str],
         entry_triggers: List[str],
         invalidation_triggers: List[str],
+        ccy: str = "$",
     ) -> int:
         if not wyckoff:
+            # 数据缺失只降低置信度，不把「数据不可得」当作「时机差」扣分
             reasons.append("缺少 Wyckoff 结构，Timing 置信度下降")
-            return -3
+            return 0
 
         phase = str(wyckoff.get("phase", "")).lower()
         support = wyckoff.get("support")
@@ -142,10 +179,20 @@ class TimingEngine:
         confidence = wyckoff.get("confidence") or 0
         score = 0
 
-        if "markup" in phase or "accumulation" in phase or "吸筹" in phase or "上升" in phase:
+        if (
+            "markup" in phase
+            or "accumulation" in phase
+            or "吸筹" in phase
+            or "上升" in phase
+        ):
             score += 10
             reasons.append(f"Wyckoff 阶段偏正面: {wyckoff.get('phase')}")
-        elif "distribution" in phase or "markdown" in phase or "派发" in phase or "下跌" in phase:
+        elif (
+            "distribution" in phase
+            or "markdown" in phase
+            or "派发" in phase
+            or "下跌" in phase
+        ):
             score -= 12
             reasons.append(f"Wyckoff 阶段偏负面: {wyckoff.get('phase')}")
 
@@ -155,17 +202,23 @@ class TimingEngine:
             score -= 2
 
         if support:
-            entry_triggers.append(f"回调接近 Wyckoff 支撑 ${support:.2f} 且不放量跌破")
-            invalidation_triggers.append(f"有效跌破 Wyckoff 支撑 ${support:.2f}")
+            entry_triggers.append(
+                f"回调接近 Wyckoff 支撑 {ccy}{support:.2f} 且不放量跌破"
+            )
+            invalidation_triggers.append(f"有效跌破 Wyckoff 支撑 {ccy}{support:.2f}")
         if resistance:
-            entry_triggers.append(f"放量突破 Wyckoff 阻力 ${resistance:.2f} 后回踩确认")
+            entry_triggers.append(
+                f"放量突破 Wyckoff 阻力 {ccy}{resistance:.2f} 后回踩确认"
+            )
 
         return score
 
     # ------------------------------------------------------------------
     # 趋势博弈分析框架子分：成交量语言 / 道氏通道 / 多空博弈 / 多时间框架
     # ------------------------------------------------------------------
-    def _volume_score(self, volume_profile: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+    def _volume_score(
+        self, volume_profile: Dict, reasons: List[str], risk_flags: List[str]
+    ) -> int:
         """成交量语言子分（趋势博弈分析框架：平量推升/量价齐升/量价紊乱/爆冲巨量）"""
         if not volume_profile:
             return 0
@@ -180,7 +233,9 @@ class TimingEngine:
         elif regime == "爆冲巨量":
             score -= 10
             reasons.append("爆冲巨量疑似抢帽子出货")
-            risk_flags.append("爆冲巨量骗局风险：趋势博弈框架四问法审视，等量能平静后再看")
+            risk_flags.append(
+                "爆冲巨量骗局风险：趋势博弈框架四问法审视，等量能平静后再看"
+            )
         elif regime == "量价紊乱":
             score -= 4
             reasons.append("量价紊乱，等待缩量后标志K线")
@@ -189,8 +244,14 @@ class TimingEngine:
             reasons.append("缩量阴跌，动能衰竭")
         return score
 
-    def _channel_score(self, dow_channel: Dict, reasons: List[str],
-                       entry_triggers: List[str], risk_flags: List[str]) -> int:
+    def _channel_score(
+        self,
+        dow_channel: Dict,
+        reasons: List[str],
+        entry_triggers: List[str],
+        risk_flags: List[str],
+        ccy: str = "$",
+    ) -> int:
         """道氏通道子分（趋势博弈分析框架：通道/斜率/颈线/顶底信号）"""
         if not dow_channel:
             return 0
@@ -207,17 +268,25 @@ class TimingEngine:
         elif direction == "下降":
             score -= 4
         if "趋缓" in slope_state:
-            score += 5
-            reasons.append("斜率趋缓（扶老太太下楼）：主力温和吸筹")
+            score += 2
+            reasons.append("下跌斜率趋缓：下跌动能衰竭，需底部确认后才可行动")
         if top_bottom == "底部三步信号":
             score += 6
             reasons.append("道氏底部三步信号：通道趋缓+筑底")
             if lower:
-                entry_triggers.append(f"道氏通道下沿 ¥{lower:.2f} 附近为潜在底部建仓区")
+                entry_triggers.append(
+                    f"道氏通道下沿 {ccy}{lower:.2f} 附近为潜在底部建仓区"
+                )
+        elif top_bottom == "下跌减速观察":
+            score += 1
+            reasons.append("下降通道低位但减速未确认，不接飞刀")
+        elif top_bottom == "顶部出轨警示":
+            score -= 3
+            reasons.append("价格出轨通道上沿，警惕假突破回落（顶部未确认）")
         elif top_bottom == "顶部三步信号":
             score -= 8
-            reasons.append("道氏顶部三步信号：出轨→颈线→通道下沿")
-            risk_flags.append("顶部信号：注意分批止盈")
+            reasons.append("道氏顶部三步信号确认：出轨后跌破颈线")
+            risk_flags.append("顶部信号确认：注意分批止盈")
         if neckline == "颈线已突破":
             score += 4
             reasons.append("颈线已突破，技术派跟风资金可能介入")
@@ -230,7 +299,13 @@ class TimingEngine:
             score -= 2
         return score
 
-    def _force_balance_score(self, force_balance: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+    def _force_balance_score(
+        self,
+        force_balance: Dict,
+        reasons: List[str],
+        risk_flags: List[str],
+        volume_regime: str = "",
+    ) -> int:
         """多空博弈子分（趋势博弈分析框架：九地形态/抢帽子/筹码锁定）"""
         if not force_balance:
             return 0
@@ -244,8 +319,14 @@ class TimingEngine:
             score += 5
             reasons.append(f"主力吸筹证据较强（{acc:.0f}）")
         if chip and chip >= 65:
-            score += 4
-            reasons.append(f"筹码锁定可能性高（{chip:.0f}）：基石仓位")
+            if volume_regime == "平量推升":
+                # 与成交量语言的「平量推升」同源（量比+涨幅），不重复计分
+                reasons.append(
+                    f"筹码锁定可能性高（{chip:.0f}）：与平量推升同源，不重复计分"
+                )
+            else:
+                score += 4
+                reasons.append(f"筹码锁定可能性高（{chip:.0f}）：基石仓位")
         if dist and dist >= 70:
             score -= 6
             reasons.append(f"主力派发证据较强（{dist:.0f}）")
@@ -257,7 +338,9 @@ class TimingEngine:
             score -= 2
         return score
 
-    def _timeframe_score(self, multi_timeframe: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+    def _timeframe_score(
+        self, multi_timeframe: Dict, reasons: List[str], risk_flags: List[str]
+    ) -> int:
         """多时间框架子分（趋势博弈分析框架：大小级别交叉印证）"""
         if not multi_timeframe:
             return 0
@@ -294,6 +377,7 @@ class TimingEngine:
         fundamentals: Dict,
         reasons: List[str],
         entry_triggers: List[str],
+        ccy: str = "$",
     ) -> int:
         price = stock_info.get("price") or 0
         target = fundamentals.get("target_mean_price") or 0
@@ -319,7 +403,7 @@ class TimingEngine:
                 reasons.append("价格接近 MA50，买点质量较好")
             elif distance > 20:
                 score -= 6
-                entry_triggers.append(f"等待回调接近 MA50 ${ma50:.2f}")
+                entry_triggers.append(f"等待回调接近 MA50 {ccy}{ma50:.2f}")
 
         if pct_from_high is not None:
             if pct_from_high > -8:
@@ -329,13 +413,19 @@ class TimingEngine:
                 score += 3
 
         if support and price:
-            entry_triggers.append(f"若回调到 20 日支撑 ${support:.2f} 附近企稳，可重新评估")
+            entry_triggers.append(
+                f"若回调到 20 日支撑 {ccy}{support:.2f} 附近企稳，可重新评估"
+            )
         elif ma20:
-            entry_triggers.append(f"若回调到 MA20 ${ma20:.2f} 附近缩量企稳，可重新评估")
+            entry_triggers.append(
+                f"若回调到 MA20 {ccy}{ma20:.2f} 附近缩量企稳，可重新评估"
+            )
 
         return score
 
-    def _catalyst_score(self, earnings: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+    def _catalyst_score(
+        self, earnings: Dict, reasons: List[str], risk_flags: List[str]
+    ) -> int:
         if not earnings or earnings.get("error"):
             return 0
         score = 0
@@ -353,9 +443,13 @@ class TimingEngine:
             reasons.append(f"下次财报: {earnings.get('next_earnings_date')}")
         return score
 
-    def _liquidity_score(self, liquidity: Dict, reasons: List[str], risk_flags: List[str]) -> int:
+    def _liquidity_score(
+        self, liquidity: Dict, reasons: List[str], risk_flags: List[str], ccy: str = "$"
+    ) -> int:
         if not liquidity or liquidity.get("error"):
-            return -2
+            # 数据缺失只降低置信度，不把「数据不可得」当作「时机差」扣分
+            reasons.append("缺少流动性数据，Timing 置信度下降")
+            return 0
         score = 0
         dollar_vol = liquidity.get("daily_dollar_volume") or 0
         short_pct = liquidity.get("short_percent_float")
@@ -367,7 +461,9 @@ class TimingEngine:
                 reasons.append("日均成交额充足")
             elif dollar_vol < 10_000_000:
                 score -= 8
-                risk_flags.append(f"日均成交额偏低 (${dollar_vol/1e6:.1f}M)，仓位需受限")
+                risk_flags.append(
+                    f"日均成交额偏低 ({ccy}{dollar_vol / 1e6:.1f}M)，仓位需受限"
+                )
         if short_pct:
             pct = short_pct * 100
             if pct > 20:
@@ -375,7 +471,9 @@ class TimingEngine:
                 risk_flags.append(f"做空比例极高 ({pct:.1f}%)，波动风险大")
             elif pct > 10:
                 score -= 2
-                reasons.append(f"做空比例较高 ({pct:.1f}%)，可能带来 squeeze 也带来波动")
+                reasons.append(
+                    f"做空比例较高 ({pct:.1f}%)，可能带来 squeeze 也带来波动"
+                )
         if days_cover and days_cover > 5:
             score -= 3
             risk_flags.append(f"Days to Cover {days_cover:.1f}，流动性压力较高")
@@ -413,10 +511,19 @@ class TimingEngine:
 
         return score
 
-    def _state_from_score(self, score: int, risk_flags: List[str], research_score: Optional[float]) -> str:
+    def _state_from_score(
+        self, score: int, risk_flags: List[str], research_score: Optional[float]
+    ) -> str:
         if research_score is not None and research_score < 45:
             return "Avoid" if score < 70 else "Watch"
-        if any("极近" in flag or "偏低" in flag for flag in risk_flags) and score < 75:
+        # 财报窗口极近（≤10 天）是硬性风险：无论分数多高都不给 Ready，隔夜跳空不可控
+        if any("极近" in flag for flag in risk_flags):
+            if score >= 55:
+                return "Wait"
+            if score >= 40:
+                return "Watch"
+            return "Avoid"
+        if any("偏低" in flag for flag in risk_flags) and score < 75:
             return "Wait"
         if score >= 75:
             return "Ready"

@@ -4,6 +4,7 @@ Report quality checks for generated stock analysis markdown.
 The evaluator is intentionally lightweight: it validates report structure and
 research/timing separation without attempting to judge the investment thesis.
 """
+
 from __future__ import annotations
 
 import re
@@ -26,7 +27,9 @@ class ReportQualityResult:
 
     @property
     def passed(self) -> bool:
-        return self.score >= 70 and not any(issue.severity == "error" for issue in self.issues)
+        return self.score >= 70 and not any(
+            issue.severity == "error" for issue in self.issues
+        )
 
     def to_markdown(self) -> str:
         lines = [
@@ -63,7 +66,11 @@ class ReportQualityEvaluator:
         ("research_score", r"\*\*Research Score\*\*", "缺少独立 Research Score 展示"),
         ("timing_state", r"\*\*Timing State\*\*", "缺少独立 Timing State 展示"),
         ("evidence", r"### 证据摘要", "缺少证据摘要"),
-        ("action_plan", r"## 六、(?:交易计划|操作建议)", "缺少交易计划/操作建议 section"),
+        (
+            "action_plan",
+            r"## 六、(?:交易计划|操作建议)",
+            "缺少交易计划/操作建议 section",
+        ),
         ("disclaimer", r"免责声明", "缺少免责声明"),
     )
     TIMING_STATES = ("Ready", "Wait", "Watch", "Avoid")
@@ -77,7 +84,9 @@ class ReportQualityEvaluator:
     )
     PENALTIES = {"error": 18, "warning": 8}
 
-    def evaluate(self, markdown: str, market_data: Dict[str, Any] | None = None) -> ReportQualityResult:
+    def evaluate(
+        self, markdown: str, market_data: Dict[str, Any] | None = None
+    ) -> ReportQualityResult:
         market_data = market_data or {}
         issues: List[ReportQualityIssue] = []
         text = markdown or ""
@@ -93,18 +102,16 @@ class ReportQualityEvaluator:
         score = max(0, 100 - penalty)
         return ReportQualityResult(score=score, issues=issues)
 
-    def _check_research_timing_separation(self, markdown: str) -> List[ReportQualityIssue]:
+    def _check_research_timing_separation(
+        self, markdown: str
+    ) -> List[ReportQualityIssue]:
         issues: List[ReportQualityIssue] = []
         lines = [line.strip() for line in markdown.splitlines()]
 
         research_lines = [
-            line for line in lines
-            if "Research Score" in line and "Timing" not in line
+            line for line in lines if "Research Score" in line and "Timing" not in line
         ]
-        timing_lines = [
-            line for line in lines
-            if "**Timing State**" in line
-        ]
+        timing_lines = [line for line in lines if "**Timing State**" in line]
 
         for line in research_lines:
             if any(re.search(rf"\b{state}\b", line) for state in self.TIMING_STATES):
@@ -116,18 +123,20 @@ class ReportQualityEvaluator:
                         "核心观点",
                     )
                 )
-            if not re.search(r"\d+(?:\.\d+)?/100", line):
+            if not re.search(r"\d+(?:\.\d+)?/100", line) and "N/A" not in line:
                 issues.append(
                     ReportQualityIssue(
                         "research_score_not_numeric",
                         "warning",
-                        "Research Score 应展示 0-100 的数值",
+                        "Research Score 应展示 0-100 的数值（或显式标注 N/A）",
                         "核心观点",
                     )
                 )
 
         for line in timing_lines:
-            has_state = any(re.search(rf"\b{state}\b", line) for state in self.TIMING_STATES)
+            has_state = any(
+                re.search(rf"\b{state}\b", line) for state in self.TIMING_STATES
+            )
             if not has_state and "N/A" not in line:
                 issues.append(
                     ReportQualityIssue(
@@ -166,7 +175,8 @@ class ReportQualityEvaluator:
                 ReportQualityIssue(
                     "data_gaps_not_disclosed",
                     "error",
-                    "存在缺失或失败的数据模块，但报告未披露数据缺口: " + "、".join(expected_gaps[:4]),
+                    "存在缺失或失败的数据模块，但报告未披露数据缺口: "
+                    + "、".join(expected_gaps[:4]),
                     "数据缺口",
                 )
             ]
@@ -193,7 +203,9 @@ class ReportQualityEvaluator:
             "target_low_price",
             "target_high_price",
         )
-        return any(self._has_meaningful_data(fundamentals.get(key)) for key in core_keys)
+        return any(
+            self._has_meaningful_data(fundamentals.get(key)) for key in core_keys
+        )
 
     def _has_meaningful_data(self, value: Any) -> bool:
         if value is None:

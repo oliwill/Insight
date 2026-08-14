@@ -63,5 +63,21 @@ scripts/_pharma_chain_out/
 scripts/_portfolio_scan_out/
 .zcode/
 
-# 公网前端工程（独立管理，暂不入库）
-web/
+# Web 运行时产物（代码入库，数据文件忽略）
+data/web.db*
+data/users/
+
+# 密钥与本地敏感文件（勿提交）
+shipkey.json
+*.shipkey
+
+# 根目录图表/裁剪/临时产物（勿提交）
+tmp_*.png
+tmp_*.jpg
+tmp_draw_*.py
+c2_*.png
+crop_*.png
+
+# 前端依赖（勿提交）
+web/frontend/node_modules/
+web/frontend/dist/

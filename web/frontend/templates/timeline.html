@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}追踪 · Insight{% endblock %}
+{% block content %}
+<h1 class="text-xl font-bold mb-4">分析追踪</h1>
+
+<form method="get" action="/timeline" class="flex gap-2 mb-4">
+  <input name="symbol" value="{{ filter_symbol }}" placeholder="按股票过滤，如 AAPL"
+         class="border rounded px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500">
+  <button class="bg-gray-800 text-white text-sm rounded px-3 hover:bg-gray-700">过滤</button>
+</form>
+
+<div class="space-y-2">
+  {% for record in records %}
+  <a href="/stocks/records/{{ record.id }}" class="block bg-white rounded-lg shadow p-3 hover:shadow-md">
+    <div class="flex items-center justify-between">
+      <span class="font-medium">{{ record.symbol }}</span>
+      <span class="text-xs text-gray-400">{{ record.created_at }}</span>
+    </div>
+    <div class="flex gap-3 mt-1 text-sm">
+      <span>Research: <b>{{ "%.1f"|format(record.research_score or 0) }}</b></span>
+      <span>Timing: <b>{{ record.timing_state or '-' }}</b></span>
+      {% if record.llm_enhanced %}<span class="text-purple-600 text-xs self-center">AI 解读</span>{% endif %}
+    </div>
+  </a>
+  {% else %}
+  <p class="text-sm text-gray-400">暂无分析记录。先从自选或股票页发起一次分析。</p>
+  {% endfor %}
+</div>
+{% endblock %}

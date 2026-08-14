@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}自选 · Insight{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-bold">我的自选</h1>
+  <form method="post" action="/watchlist/analyze-all"
+        hx-post="/watchlist/analyze-all" hx-target="body" hx-swap="outerHTML"
+        class="inline">
+    <button class="bg-blue-600 text-white text-sm rounded px-3 py-1.5 hover:bg-blue-700"
+            {% if not symbols %}disabled{% endif %}>分析全部</button>
+  </form>
+</div>
+
+{% if request.query_params.get("queued") %}
+<div class="bg-green-50 text-green-700 text-sm rounded p-2 mb-3">已提交 {{ request.query_params.get("queued") }} 个分析任务</div>
+{% endif %}
+
+<form hx-post="/watchlist/add" hx-target="#watchlist-rows" hx-swap="beforeend" class="flex gap-2 mb-4">
+  <input name="symbol" placeholder="股票代码，如 AAPL / 0700.HK / SH603906"
+         class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+  <button class="bg-gray-800 text-white text-sm rounded px-4 hover:bg-gray-700">加入自选</button>
+</form>
+
+<div id="watchlist-rows" class="space-y-2">
+  {% for symbol in symbols %}
+    {% set latest = records_by_symbol.get(symbol) %}
+    {% include "partials/watchlist_row.html" %}
+  {% else %}
+  <p class="text-sm text-gray-400">自选为空。输入股票代码加入，或从股票页添加。</p>
+  {% endfor %}
+</div>
+{% endblock %}

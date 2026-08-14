@@ -154,12 +154,14 @@ def compute_technicals(df: pd.DataFrame) -> Dict[str, Any]:
     return result
 
 
-def generate_analysis(code: str) -> Dict[str, Any]:
+def generate_analysis(code: str, wiki_base=None) -> Dict[str, Any]:
     """
     执行完整的股票分析流水线
 
     Args:
-        code: 股票代码（如 "AAPL", "00700.HK"）
+        code: 股票代码（如 AAPL.US / 03986.HK）
+        wiki_base: 用户级 vault 根目录（读取该用户的 wiki 历史上下文）；
+            默认 None → 使用 Config 全局 vault（CLI 兼容）
 
     Returns:
         包含所有分析结果的字典，结构如下：
@@ -183,7 +185,7 @@ def generate_analysis(code: str) -> Dict[str, Any]:
         }
     """
     dm = DataManager()
-    mm = MemoryManager()
+    mm = MemoryManager(base_dir=wiki_base)
 
     output: Dict[str, Any] = {'code': code, '_generated_at': datetime.now().isoformat()}
 

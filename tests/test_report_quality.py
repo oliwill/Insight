@@ -30,6 +30,14 @@ def test_quality_evaluator_accepts_generated_report_with_disclosed_gaps():
 
 
 def test_quality_evaluator_flags_research_score_timing_confusion():
+    from types import SimpleNamespace
+
+    research_stub = SimpleNamespace(
+        total_adjusted_score=50.0,
+        dimensions={},
+        verdict="观察",
+        confidence="low",
+    )
     markdown = ReportGenerator.generate(
         "AAPL.US",
         {
@@ -39,7 +47,10 @@ def test_quality_evaluator_flags_research_score_timing_confusion():
                 "price": 190.0,
             }
         },
+        research_score=research_stub,
     ).replace("| **Research Score** | 50.0/100 🟡 |", "| **Research Score** | Ready |")
+
+    assert "| **Research Score** | Ready |" in markdown
 
     quality = ReportQualityEvaluator().evaluate(markdown, {})
 

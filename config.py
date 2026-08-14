@@ -4,6 +4,7 @@
 集中管理所有环境变量，提供默认值和类型转换。
 在应用启动时加载一次，各模块直接导入使用。
 """
+
 import os
 from pathlib import Path
 from typing import Optional
@@ -38,11 +39,34 @@ class Config:
     # ========== 超时配置 ==========
     ANALYSIS_TIMEOUT: int = int(os.getenv("ANALYSIS_TIMEOUT", "30"))
 
+    # ========== Web 平台 ==========
+    WEB_DB_PATH: Path = Path(os.getenv("WEB_DB_PATH", "data/web.db"))
+    USERS_DATA_DIR: Path = Path(os.getenv("USERS_DATA_DIR", "data/users"))
+    SESSION_TTL_DAYS: int = int(os.getenv("SESSION_TTL_DAYS", "7"))
+    ANALYSIS_DAILY_QUOTA: int = int(os.getenv("ANALYSIS_DAILY_QUOTA", "10"))
+    # 注册邀请码（可选；留空则不校验，直接开放注册）
+    INVITE_CODE: Optional[str] = os.getenv("INVITE_CODE")
+
+    # ========== LLM 报告增强（可选，缺失时静默降级为确定性文本）==========
+    LLM_API_KEY: Optional[str] = os.getenv("LLM_API_KEY")
+    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://api.deepseek.com")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "deepseek-chat")
+
     # ========== 定时任务配置（可选）==========
     SCHEDULE_SCAN_INBOX: Optional[str] = os.getenv("SCHEDULE_SCAN_INBOX")
     SCHEDULE_REVIEW: Optional[str] = os.getenv("SCHEDULE_REVIEW")
     SCHEDULE_DASHBOARD: Optional[str] = os.getenv("SCHEDULE_DASHBOARD")
+    SCHEDULE_BRIEF: Optional[str] = os.getenv("SCHEDULE_BRIEF")
     SCHEDULE_NOTIFY: Optional[str] = os.getenv("SCHEDULE_NOTIFY")
+
+    # ========== 每日简报（Daily Brief）==========
+    BRIEF_LOOKBACK_DAYS: int = int(os.getenv("BRIEF_LOOKBACK_DAYS", "7"))
+    BRIEF_TOP_N: int = int(os.getenv("BRIEF_TOP_N", "3"))
+    BRIEF_MATERIALS_LIMIT: int = int(os.getenv("BRIEF_MATERIALS_LIMIT", "5"))
+
+    # ========== 通知通道（可选，填 webhook URL 即启用）==========
+    FEISHU_WEBHOOK_URL: Optional[str] = os.getenv("FEISHU_WEBHOOK_URL")
+    WECOM_WEBHOOK_URL: Optional[str] = os.getenv("WECOM_WEBHOOK_URL")
 
     @classmethod
     def validate(cls) -> list[str]:

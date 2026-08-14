@@ -13,6 +13,7 @@
     la = LiquidityAnalyzer()
     data = la.analyze("AAPL")
 """
+
 import json
 from typing import Dict, Optional
 
@@ -22,6 +23,7 @@ try:
     from loguru import logger
 except ImportError:
     import logging
+
     logger = logging.getLogger("trader_liquidity")
 
 
@@ -80,16 +82,24 @@ class LiquidityAnalyzer:
             result["float_shares"] = info.get("floatShares")
             result["shares_outstanding"] = info.get("sharesOutstanding")
 
-            # Volume
+            # Volume（A 股按「手」返回，统一为股后再算换手/成交额）
             result["avg_volume_10d"] = info.get("averageVolume10days")
             result["avg_volume_3m"] = info.get("averageVolume")
+            if symbol.upper().startswith(("SH", "SZ")):
+                for key in ("avg_volume_10d", "avg_volume_3m"):
+                    if result.get(key):
+                        result[key] = result[key] * 100
 
             # Turnover (if we have price and volume)
             price = info.get("regularMarketPrice") or info.get("currentPrice")
             if price and result.get("avg_volume_3m") and result.get("float_shares"):
                 daily_dollar_volume = price * result["avg_volume_3m"]
                 market_cap_float = price * result["float_shares"]
-                result["turnover_ratio"] = daily_dollar_volume / market_cap_float if market_cap_float > 0 else None
+                result["turnover_ratio"] = (
+                    daily_dollar_volume / market_cap_float
+                    if market_cap_float > 0
+                    else None
+                )
                 result["daily_dollar_volume"] = daily_dollar_volume
             else:
                 result["turnover_ratio"] = None
@@ -110,7 +120,7 @@ class LiquidityAnalyzer:
 
         short_pct = data.get("short_percent_float")
         if short_pct and short_pct > 0.15:
-            flags.append(f"做空比例高 ({short_pct*100:.1f}%)，存在 squeeze 风险")
+            flags.append(f"做空比例高 ({short_pct * 100:.1f}%)，存在 squeeze 风险")
         if short_pct and short_pct > 0.20:
             flags.append("做空比例极高，squeeze 燃料充足")
 
@@ -124,7 +134,7 @@ class LiquidityAnalyzer:
 
         dollar_vol = data.get("daily_dollar_volume")
         if dollar_vol and dollar_vol < 10_000_000:
-            flags.append(f"日均成交额低 (${dollar_vol/1e6:.1f}M)，大单冲击风险")
+            flags.append(f"日均成交额低 (${dollar_vol / 1e6:.1f}M)，大单冲击风险")
 
         inst_pct = data.get("institutional_ownership")
         if inst_pct and inst_pct < 0.05:
@@ -138,7 +148,7 @@ class LiquidityAnalyzer:
 
         short_pct = data.get("short_percent_float")
         if short_pct is not None:
-            lines.append(f"- **做空比例**: {short_pct*100:.1f}% of float")
+            lines.append(f"- **做空比例**: {short_pct * 100:.1f}% of float")
         days_cover = data.get("days_to_cover")
         if days_cover is not None:
             lines.append(f"- **Days to Cover**: {days_cover:.1f} 天")
@@ -146,17 +156,17 @@ class LiquidityAnalyzer:
         inst = data.get("institutional_ownership")
         insider = data.get("insider_ownership")
         if inst is not None:
-            lines.append(f"- **机构持仓**: {inst*100:.1f}%")
+            lines.append(f"- **机构持仓**: {inst * 100:.1f}%")
         if insider is not None:
-            lines.append(f"- **内部人持仓**: {insider*100:.1f}%")
+            lines.append(f"- **内部人持仓**: {insider * 100:.1f}%")
 
         vol_3m = data.get("avg_volume_3m")
         if vol_3m:
-            lines.append(f"- **3月均量**: {vol_3m/1e6:.1f}M 股/天")
+            lines.append(f"- **3月均量**: {vol_3m / 1e6:.1f}M 股/天")
 
         dollar_vol = data.get("daily_dollar_volume")
         if dollar_vol:
-            lines.append(f"- **日均成交额**: ${dollar_vol/1e6:.1f}M")
+            lines.append(f"- **日均成交额**: ${dollar_vol / 1e6:.1f}M")
 
         flags = data.get("risk_flags", [])
         if flags:
@@ -173,6 +183,7 @@ class LiquidityAnalyzer:
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) < 2:
         print("Usage: python liquidity.py TICKER")
         sys.exit(1)

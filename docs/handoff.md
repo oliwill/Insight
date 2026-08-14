@@ -5,7 +5,7 @@ Status date: 2026-06-12
 ## What Is Working
 
 | Area | Status | Entry point |
-|---|---|---|
+| --- | --- | --- |
 | One-click Cockpit analysis | implemented | `python scripts/analyze_stock.py <TICKER>` |
 | Data-only analysis context | implemented | `python run_analysis.py <TICKER>` |
 | Obsidian wiki persistence | implemented | `run_analysis.write_analysis_to_obsidian()` |
@@ -36,7 +36,11 @@ Status date: 2026-06-12
 - Pipeline modules should emit `*_error` fields instead of stopping the full report.
 - Data-source fallback attempts should be inspectable via `_data_sources` in `generate_analysis()` output.
 - Generated reports should pass the quality evaluator for the title/data-time header, required sections, Research Score / Timing State separation, and data-gap disclosure.
-- `supply_chain` is additive fundamental context exposed at `market_data["supply_chain"]` and `fundamentals["supply_chain"]`; it must not create a separate top-level Obsidian section or hide missing financial fundamentals.
+- `supply_chain` is additive fundamental context exposed at `market_data["supply_chain"]` and `fundamentals["supply_chain"]`; it must not create a separate top-level Obsidian section or hide missing financial fundamentals. To avoid double counting, the supply-chain bottleneck only moves the `护城河` dimension score; `行业/TAM` and `增长质量` keep it as evidence text only.
+- Missing data must never be presented as a conclusion: no Wyckoff/technical score may stand in for Research Score (show `N/A`), a missing analyst target must not render as `高估`, and non-`Ready` states must not print an entry price in the opening conclusion.
+- Data gaps do not lower the Timing score (missing liquidity/Wyckoff only lower confidence), but an imminent earnings window (≤10 days) hard-caps Timing State at `Wait` regardless of score.
+- Dow-channel top/bottom signals require confirmation (neckline break for tops; slope slowdown + low channel position for bottoms), and volume-spike detection only scans the most recent 20 trading days. These behaviors are locked by `tests/test_framework_fixes.py`.
+- Data units are normalized at the source boundary, never guessed in consumers: `data/manager.py` multiplies A-share (`SH`/`SZ`) historical volume by 100 at `get_historical_data` (exchange data reports 手/100-share lots; `data/liquidity.py` does the same for `avg_volume_*`), and growth rates (`revenue_growth`/`earnings_growth`, Yahoo decimal) are converted to percent via `data.constants.normalize_growth_rate`. Unknown symbols must not substitute their own PS/PE as a peer benchmark — report the gap instead.
 - The report reading path is top-down: `# CODE Name`, `**数据时间**`, `## 一、本次分析总结`, optional dynamic `关键判断`, short `数据质量提醒`, then evidence and detailed modules.
 - Yahoo-backed modules normalize internal 5-digit HK symbols to Yahoo 4-digit `.HK` symbols while preserving canonical wiki identity.
 - Appended generated Markdown must not create new top-level wiki sections; module headings are stripped and research-note headings are demoted.
@@ -109,7 +113,7 @@ Do not run `python scripts/analyze_stock.py <TICKER>` unless the user wants a re
 ## Documentation Map
 
 | File | Read when |
-|---|---|
+| --- | --- |
 | `README.md` / `README.zh.md` | onboarding and command overview |
 | `CLAUDE.md` | AI operating rules for this project |
 | `docs/architecture.md` | understanding data flow, module boundaries, and Serenity supply-chain enrichment |

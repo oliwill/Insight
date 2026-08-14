@@ -4,6 +4,7 @@
 
 整合所有数据模块，生成格式化的 Markdown 分析报告
 """
+
 import os
 from pathlib import Path
 from typing import Dict, Any, Sequence
@@ -30,7 +31,15 @@ class ReportGenerator:
     }
 
     @classmethod
-    def generate(cls, stock_code: str, market_data: Dict[str, Any], research_score=None, timing_state=None, evidence: Sequence = None) -> str:
+    def generate(
+        cls,
+        stock_code: str,
+        market_data: Dict[str, Any],
+        research_score=None,
+        timing_state=None,
+        evidence: Sequence = (),
+        wiki_base=None,
+    ) -> str:
         """
         生成完整的分析报告
 
@@ -42,15 +51,17 @@ class ReportGenerator:
             格式化的 Markdown 报告
         """
         # 提取数据
-        stock_info = market_data.get('stock_info', {})
-        fundamentals = market_data.get('fundamentals', {})
-        technicals = market_data.get('technicals', {})
-        wyckoff = market_data.get('wyckoff', {})
-        liquidity = market_data.get('liquidity', {})
-        options = market_data.get('options', {})
-        earnings = market_data.get('earnings', {})
-        web_search = market_data.get('web_search', {})
-        supply_chain = market_data.get('supply_chain', {}) or fundamentals.get('supply_chain', {})
+        stock_info = market_data.get("stock_info", {})
+        fundamentals = market_data.get("fundamentals", {})
+        technicals = market_data.get("technicals", {})
+        wyckoff = market_data.get("wyckoff", {})
+        liquidity = market_data.get("liquidity", {})
+        options = market_data.get("options", {})
+        earnings = market_data.get("earnings", {})
+        web_search = market_data.get("web_search", {})
+        supply_chain = market_data.get("supply_chain", {}) or fundamentals.get(
+            "supply_chain", {}
+        )
 
         sections = [
             cls._format_report_header(stock_code, stock_info, market_data),
@@ -68,10 +79,13 @@ class ReportGenerator:
                 timing_state,
                 evidence or [],
                 market_data,
+                wiki_base=wiki_base,
             ),
         ]
 
-        return "\n\n".join(section for section in sections if section and section.strip())
+        return "\n\n".join(
+            section for section in sections if section and section.strip()
+        )
 
     @classmethod
     def evaluate_quality(cls, markdown: str, market_data: Dict[str, Any] = None):
@@ -80,27 +94,45 @@ class ReportGenerator:
         return ReportQualityEvaluator().evaluate(markdown, market_data or {})
 
     @classmethod
-    def _section_1_overview(cls, stock_code: str, stock_info: Dict, technicals: Dict, fundamentals: Dict, liquidity: Dict, options: Dict, wyckoff: Dict, earnings: Dict, web_search: Dict, research_score=None, timing_state=None, evidence: Sequence = (), market_data: Dict = None) -> str:
+    def _section_1_overview(
+        cls,
+        stock_code: str,
+        stock_info: Dict,
+        technicals: Dict,
+        fundamentals: Dict,
+        liquidity: Dict,
+        options: Dict,
+        wyckoff: Dict,
+        earnings: Dict,
+        web_search: Dict,
+        research_score=None,
+        timing_state=None,
+        evidence: Sequence = (),
+        market_data: Dict = None,
+        wiki_base=None,
+    ) -> str:
         """Main report body ordered for top-down reading."""
         market_data = market_data or {}
-        name = stock_info.get('name') or stock_code
-        sector = stock_info.get('sector', '-')
-        industry = stock_info.get('industry', '-')
-        price = stock_info.get('price') or 0
-        change_pct = stock_info.get('change_pct') or 0
-        pe_forward = fundamentals.get('pe_forward') or 0
-        target_mean = fundamentals.get('target_mean_price') or 0
-        target_low = fundamentals.get('target_low_price') or 0
-        target_high = fundamentals.get('target_high_price') or 0
-        analyst_count = fundamentals.get('analyst_count') or 0
-        recommendation = (fundamentals.get('recommendation_key') or '-').upper()
-        short_percent_float = liquidity.get('short_percent_float') or 0
-        days_to_cover = liquidity.get('days_to_cover') or 0
-        institutional_ownership = liquidity.get('institutional_ownership') or 0
-        daily_dollar_volume = liquidity.get('daily_dollar_volume') or 0
+        name = stock_info.get("name") or stock_code
+        sector = stock_info.get("sector", "-")
+        industry = stock_info.get("industry", "-")
+        price = stock_info.get("price") or 0
+        change_pct = stock_info.get("change_pct") or 0
+        pe_forward = fundamentals.get("pe_forward") or 0
+        target_mean = fundamentals.get("target_mean_price") or 0
+        target_low = fundamentals.get("target_low_price") or 0
+        target_high = fundamentals.get("target_high_price") or 0
+        analyst_count = fundamentals.get("analyst_count") or 0
+        recommendation = (fundamentals.get("recommendation_key") or "-").upper()
+        short_percent_float = liquidity.get("short_percent_float") or 0
+        days_to_cover = liquidity.get("days_to_cover") or 0
+        institutional_ownership = liquidity.get("institutional_ownership") or 0
+        daily_dollar_volume = liquidity.get("daily_dollar_volume") or 0
+
+        ccy = cls._currency_symbol(stock_code, stock_info)
 
         def fmt_money(value):
-            return f"${value:,.2f}" if value else "N/A"
+            return f"{ccy}{value:,.2f}" if value else "N/A"
 
         def fmt_num(value, digits=2):
             return f"{value:.{digits}f}" if value is not None else "N/A"
@@ -112,39 +144,57 @@ class ReportGenerator:
             return f"{value:{sign}.{digits}f}%"
 
         # 评分
-        research_value = getattr(research_score, 'total_adjusted_score', None)
-        if research_value is None:
-            research_value = market_score = fundamentals.get('wyckoff_score', 50)
-        else:
-            market_score = research_value
+        # Research Score 缺失时保持 None 并显式展示 N/A；
+        # 绝不用技术指标分（如 Wyckoff）冒充研究质量分——两层必须分离。
+        research_value = getattr(research_score, "total_adjusted_score", None)
+        research_display = (
+            f"{research_value:.1f}/100" if research_value is not None else "N/A"
+        )
         score_emoji = cls._get_score_emoji(research_value)
-        timing_label = getattr(timing_state, 'state', 'N/A')
-        timing_internal = getattr(timing_state, 'internal_score', None)
+        timing_label = getattr(timing_state, "state", "N/A")
+        timing_internal = getattr(timing_state, "internal_score", None)
 
-        # 估值信号
-        potential = (target_mean / price - 1) * 100 if price > 0 and target_mean > 0 else 0
+        # 估值信号（无分析师目标价时保持 None，不得把缺数据显示成「高估」）
+        potential = (
+            (target_mean / price - 1) * 100 if price > 0 and target_mean > 0 else None
+        )
 
         # 趋势信号
-        trend_short = technicals.get('trend_short', 'NEUTRAL')
-        rsi = technicals.get('rsi_14', 50)
-        put_call_ratio = options.get('put_call_ratio')
-        put_call_display = f"{put_call_ratio:.2f}" if put_call_ratio is not None else "N/A"
-        max_pain = options.get('max_pain')
-        max_pain_display = f"${max_pain:.2f}" if max_pain is not None else "N/A"
+        trend_short = technicals.get("trend_short", "NEUTRAL")
+        rsi = technicals.get("rsi_14", 50)
+        put_call_ratio = options.get("put_call_ratio")
+        put_call_display = (
+            f"{put_call_ratio:.2f}" if put_call_ratio is not None else "N/A"
+        )
+        max_pain = options.get("max_pain")
+        max_pain_display = f"{ccy}{max_pain:.2f}" if max_pain is not None else "N/A"
 
-        supply_chain = market_data.get('supply_chain', {}) or fundamentals.get('supply_chain', {})
-        moat_stress_test = market_data.get('moat_stress_test') or fundamentals.get('moat_stress_test') or {}
+        supply_chain = market_data.get("supply_chain", {}) or fundamentals.get(
+            "supply_chain", {}
+        )
+        moat_stress_test = (
+            market_data.get("moat_stress_test")
+            or fundamentals.get("moat_stress_test")
+            or {}
+        )
         moat_stress_md = cls._format_moat_stress_test(moat_stress_test)
         summary_lines = [
             "## 一、本次分析总结",
             "",
-            cls._format_opening_conclusion(stock_code, stock_info, fundamentals, technicals, research_score, timing_state),
+            cls._format_opening_conclusion(
+                stock_code,
+                stock_info,
+                fundamentals,
+                technicals,
+                research_score,
+                timing_state,
+            ),
             "",
             f"**一句话判断**：{cls._get_one_line_summary(research_value, timing_label, potential, technicals, fundamentals)}",
             "",
             "| 项目 | 结论 |",
             "|---|---|",
-            f"| **Research Score** | {research_value:.1f}/100 {score_emoji} |",
+            f"| **Research Score** | {research_display} {score_emoji} |",
             f"| **Timing State** | {timing_label}{f'（内部时机分 {timing_internal}/100）' if timing_internal is not None else ''} |",
             f"| 当前动作 | {cls._get_current_action(timing_label, research_value, potential, technicals)} |",
             f"| 主要矛盾 | {cls._get_main_tension(research_value, timing_label, potential, technicals, fundamentals)} |",
@@ -177,7 +227,8 @@ class ReportGenerator:
 
         sections = ["\n".join(summary_lines).strip()]
 
-        evidence_and_score = [f"""---
+        evidence_and_score = [
+            f"""---
 
 ## 二、公司与证据概览
 
@@ -187,7 +238,7 @@ class ReportGenerator:
 ### 证据摘要
 {cls._format_evidence_summary(evidence)}
 
-### {cls.EMOJI['chart']} 快速评估
+### {cls.EMOJI["chart"]} 快速评估
 
 | 维度 | 数值 | 评级 |
 |------|------|------|
@@ -196,22 +247,36 @@ class ReportGenerator:
 | 趋势 | {trend_short} | {cls._get_trend_emoji(trend_short)} |
 | RSI | {fmt_num(rsi, 1)} | {cls._get_rsi_signal(rsi)} |
 | 做空比例 | {fmt_pct(short_percent_float * 100, 1)} | {cls._get_short_signal(short_percent_float * 100)} |
-"""]
+"""
+        ]
 
-        if cls._has_any_value(fundamentals, ["target_mean_price", "target_low_price", "target_high_price", "analyst_count", "recommendation_key"]):
-            evidence_and_score.append(f"""### {cls.EMOJI['target']} 分析师预期
+        if cls._has_any_value(
+            fundamentals,
+            [
+                "target_mean_price",
+                "target_low_price",
+                "target_high_price",
+                "analyst_count",
+                "recommendation_key",
+            ],
+        ):
+            evidence_and_score.append(f"""### {cls.EMOJI["target"]} 分析师预期
 - **目标价均值**：{fmt_money(target_mean)} ({fmt_pct(potential, 1, signed=True)})
 - **目标价区间**：{fmt_money(target_low)} - {fmt_money(target_high)}
 - **评级**：{recommendation} ({analyst_count} 位分析师)
 """)
-        sections.append("\n\n".join(item.strip() for item in evidence_and_score if item and item.strip()))
+        sections.append(
+            "\n\n".join(
+                item.strip() for item in evidence_and_score if item and item.strip()
+            )
+        )
 
         supply_chain_md = cls._format_supply_chain_analysis(supply_chain)
         if cls._has_meaningful_data(fundamentals) or supply_chain_md:
             sections.append(f"""---
 
 ## 三、基本面与估值
-{supply_chain_md + chr(10) + chr(10) if supply_chain_md else ''}### 护城河分析
+{supply_chain_md + chr(10) + chr(10) if supply_chain_md else ""}### 护城河分析
 
 {cls._format_moat_analysis(fundamentals)}
 
@@ -220,30 +285,32 @@ class ReportGenerator:
 ### 估值水平
 | 指标 | 数值 | 评价 |
 |------|------|------|
-| PE (Forward) | {fmt_num(fundamentals.get('pe_forward'))} | {cls._get_pe_signal(fundamentals.get('pe_forward'))} |
-| PB | {fmt_num(fundamentals.get('pb'))} | {cls._get_pb_signal(fundamentals.get('pb'))} |
-| PS | {fmt_num(fundamentals.get('ps'))} | {cls._get_ps_signal(fundamentals.get('ps'))} |
+| PE (Forward) | {fmt_num(fundamentals.get("pe_forward"))} | {cls._get_pe_signal(fundamentals.get("pe_forward"))} |
+| PB | {fmt_num(fundamentals.get("pb"))} | {cls._get_pb_signal(fundamentals.get("pb"))} |
+| PS | {fmt_num(fundamentals.get("ps"))} | {cls._get_ps_signal(fundamentals.get("ps"))} |
 
 ### 盈利能力
 | 指标 | 数值 | 评价 |
 |------|------|------|
-| ROE | {fmt_pct(cls._percent_value(fundamentals.get('roe')), 2)} | {cls._get_roe_signal(cls._percent_value(fundamentals.get('roe')))} |
-| ROA | {fmt_pct(cls._percent_value(fundamentals.get('roa')), 2)} | {cls._get_roa_signal(cls._percent_value(fundamentals.get('roa')))} |
-| 毛利率 | {fmt_pct(cls._percent_value(fundamentals.get('gross_margin')), 2)} | {cls._get_margin_signal(cls._percent_value(fundamentals.get('gross_margin')))} |
-| 净利率 | {fmt_pct(cls._percent_value(fundamentals.get('profit_margin')), 2)} | {cls._get_margin_signal(cls._percent_value(fundamentals.get('profit_margin')))} |
+| ROE | {fmt_pct(cls._percent_value(fundamentals.get("roe")), 2)} | {cls._get_roe_signal(cls._percent_value(fundamentals.get("roe")))} |
+| ROA | {fmt_pct(cls._percent_value(fundamentals.get("roa")), 2)} | {cls._get_roa_signal(cls._percent_value(fundamentals.get("roa")))} |
+| 毛利率 | {fmt_pct(cls._percent_value(fundamentals.get("gross_margin")), 2)} | {cls._get_margin_signal(cls._percent_value(fundamentals.get("gross_margin")))} |
+| 净利率 | {fmt_pct(cls._percent_value(fundamentals.get("profit_margin")), 2)} | {cls._get_margin_signal(cls._percent_value(fundamentals.get("profit_margin")))} |
 
 ### 成长性
-- **营收增长**：{fmt_pct(cls._percent_value(fundamentals.get('revenue_growth')), 1, signed=True)} YoY {cls._get_growth_emoji(cls._percent_value(fundamentals.get('revenue_growth')))}
+- **营收增长**：{fmt_pct(cls._percent_value(fundamentals.get("revenue_growth")), 1, signed=True)} YoY {cls._get_growth_emoji(cls._percent_value(fundamentals.get("revenue_growth")))}
 
 ### 财务健康
-- **流动比率**：{fmt_num(fundamentals.get('current_ratio'))} {cls._get_current_ratio_signal(fundamentals.get('current_ratio'))}
-- **债务权益比**：{fmt_num(fundamentals.get('debt_equity'), 1)}
-- **现金**：{cls._format_large_money(fundamentals.get('total_cash'))} | **债务**：{cls._format_large_money(fundamentals.get('total_debt'))}
-- **自由现金流**：{cls._format_large_money(fundamentals.get('free_cashflow'))} {cls._get_fcf_signal(fundamentals.get('free_cashflow'))}
+- **流动比率**：{fmt_num(fundamentals.get("current_ratio"))} {cls._get_current_ratio_signal(fundamentals.get("current_ratio"))}
+- **债务权益比**：{fmt_num(fundamentals.get("debt_equity"), 1)}
+- **现金**：{cls._format_large_money(fundamentals.get("total_cash"))} | **债务**：{cls._format_large_money(fundamentals.get("total_debt"))}
+- **自由现金流**：{cls._format_large_money(fundamentals.get("free_cashflow"))} {cls._get_fcf_signal(fundamentals.get("free_cashflow"))}
 """)
 
         if cls._has_meaningful_data(technicals) or cls._has_meaningful_data(wyckoff):
-            chart_gallery = cls._format_chart_gallery(stock_code, market_data)
+            chart_gallery = cls._format_chart_gallery(
+                stock_code, market_data, wiki_base
+            )
             sections.append(f"""---
 
 ## 四、技术结构与五维分析
@@ -254,28 +321,28 @@ class ReportGenerator:
 
 ### 价格位置
 - **当前价格**：{fmt_money(price)}
-- **52周区间**：{fmt_money(technicals.get('period_low'))} - {fmt_money(technicals.get('period_high'))}
-- **距高点**：{fmt_pct(technicals.get('pct_from_high'), 1, signed=True)} | **距低点**：{fmt_pct(technicals.get('pct_from_low'), 1, signed=True)}
+- **52周区间**：{fmt_money(technicals.get("period_low"))} - {fmt_money(technicals.get("period_high"))}
+- **距高点**：{fmt_pct(technicals.get("pct_from_high"), 1, signed=True)} | **距低点**：{fmt_pct(technicals.get("pct_from_low"), 1, signed=True)}
 
 ### 趋势分析
-- **短期**：{trend_short} (MA5: {fmt_money(technicals.get('ma5'))} vs MA20: {fmt_money(technicals.get('ma20'))}) {cls._get_trend_emoji(trend_short)}
-- **中期**：{technicals.get('trend_mid', 'NEUTRAL')} (MA20 vs MA50: {fmt_money(technicals.get('ma50'))})
+- **短期**：{trend_short} (MA5: {fmt_money(technicals.get("ma5"))} vs MA20: {fmt_money(technicals.get("ma20"))}) {cls._get_trend_emoji(trend_short)}
+- **中期**：{technicals.get("trend_mid", "NEUTRAL")} (MA20 vs MA50: {fmt_money(technicals.get("ma50"))})
 
 ### 技术指标
 | 指标 | 数值 | 信号 |
 |------|------|------|
 | RSI(14) | {fmt_num(rsi, 2)} | {cls._get_rsi_signal(rsi)} |
-| MACD | {fmt_num(technicals.get('macd'), 3)} | {cls._get_macd_signal(technicals.get('macd_hist'))} |
-| KDJ_K | {fmt_num(technicals.get('kdj_k'), 2)} | {cls._get_kdj_signal(technicals.get('kdj_k'), technicals.get('kdj_d'))} |
+| MACD | {fmt_num(technicals.get("macd"), 3)} | {cls._get_macd_signal(technicals.get("macd_hist"))} |
+| KDJ_K | {fmt_num(technicals.get("kdj_k"), 2)} | {cls._get_kdj_signal(technicals.get("kdj_k"), technicals.get("kdj_d"))} |
 
 ### 支撑/阻力
-- **阻力**：{fmt_money(technicals.get('resistance_20d'))} (20日)
-- **支撑**：{fmt_money(technicals.get('support_20d'))} (20日)
+- **阻力**：{fmt_money(technicals.get("resistance_20d"))} (20日)
+- **支撑**：{fmt_money(technicals.get("support_20d"))} (20日)
 
 ### Wyckoff 分析
-- **阶段**：{wyckoff.get('phase', 'N/A')}
-- **区间**：{fmt_money(wyckoff.get('support'))} - {fmt_money(wyckoff.get('resistance'))}
-- **置信度**：{fmt_pct(wyckoff.get('confidence'), 0)}
+- **阶段**：{wyckoff.get("phase", "N/A")}
+- **区间**：{fmt_money(wyckoff.get("support"))} - {fmt_money(wyckoff.get("resistance"))}
+- **置信度**：{fmt_pct(wyckoff.get("confidence"), 0)}
 {chart_gallery}
 """)
 
@@ -305,24 +372,28 @@ class ReportGenerator:
 
 ## 六、操作建议
 ### 当前状态
-{cls._get_timing_action(timing_label)} | Research Score {research_value:.1f}/100 | Timing {timing_label}
+{cls._get_timing_action(timing_label)} | Research Score {research_display} | Timing {timing_label}
 
 ### 交易网格
 {cls._get_trading_grid(stock_info, technicals, fundamentals, wyckoff)}
 
 ### 仓位管理
 - **建议仓位**：{cls._get_timing_position(timing_label, research_value)}
-- **止损位**：基于 ATR 2.5x 或 {fmt_money(technicals.get('support_20d'))}
+- **止损位**：基于 ATR 2.5x 或 {fmt_money(technicals.get("support_20d"))}
 """)
 
-        if cls._has_meaningful_data(earnings) or cls._has_any_value(fundamentals, ["target_mean_price", "free_cashflow"]) or cls._has_meaningful_data(liquidity):
+        if (
+            cls._has_meaningful_data(earnings)
+            or cls._has_any_value(fundamentals, ["target_mean_price", "free_cashflow"])
+            or cls._has_meaningful_data(liquidity)
+        ):
             sections.append(f"""---
 
 ## 七、催化与风险
-### {cls.EMOJI['positive']} 向上催化
+### {cls.EMOJI["positive"]} 向上催化
 {cls._get_positive_catalysts(fundamentals, earnings, price)}
 
-### {cls.EMOJI['negative']} 下行风险
+### {cls.EMOJI["negative"]} 下行风险
 {cls._get_negative_risks(fundamentals, liquidity)}
 """)
 
@@ -333,7 +404,15 @@ class ReportGenerator:
 {cls._get_sentiment_analysis(web_search)}
 """)
 
-        gaps = cls._format_data_gaps(market_data, fundamentals, technicals, liquidity, options, earnings, web_search)
+        gaps = cls._format_data_gaps(
+            market_data,
+            fundamentals,
+            technicals,
+            liquidity,
+            options,
+            earnings,
+            web_search,
+        )
         if gaps:
             sections.append(f"""---
 
@@ -342,10 +421,14 @@ class ReportGenerator:
 """)
 
         sections.append("**免责声明**：本分析仅供参考，不构成投资建议。")
-        return "\n\n".join(section.strip() for section in sections if section and section.strip())
+        return "\n\n".join(
+            section.strip() for section in sections if section and section.strip()
+        )
 
     @classmethod
-    def _format_report_header(cls, stock_code: str, stock_info: Dict, market_data: Dict) -> str:
+    def _format_report_header(
+        cls, stock_code: str, stock_info: Dict, market_data: Dict
+    ) -> str:
         title = cls._format_report_title(stock_code, stock_info)
         data_time = cls._format_data_time(stock_info, market_data)
         return f"{title}\n\n**数据时间**：{data_time}"
@@ -446,7 +529,9 @@ class ReportGenerator:
         if market_data.get("fundamentals_error"):
             gaps.append(f"- **基本面**：{market_data.get('fundamentals_error')}")
         elif not cls._has_core_fundamental_data(fundamentals):
-            gaps.append("- **基本面**：本次未取得有效财务估值数据，产业链信息仅作为基本面补充")
+            gaps.append(
+                "- **基本面**：本次未取得有效财务估值数据，产业链信息仅作为基本面补充"
+            )
         return "\n".join(gaps)
 
     @classmethod
@@ -477,9 +562,9 @@ class ReportGenerator:
     @classmethod
     def _get_one_line_summary(
         cls,
-        research_value: float,
+        research_value,
         timing_label: str,
-        potential: float,
+        potential,
         technicals: Dict,
         fundamentals: Dict,
     ) -> str:
@@ -488,6 +573,8 @@ class ReportGenerator:
         pe_forward = fundamentals.get("pe_forward")
         ps = fundamentals.get("ps")
 
+        if research_value is None:
+            return "本次缺少研究评分数据，优先补齐证据与数据缺口后再形成结论。"
         if timing_label == "Ready" and research_value >= 60:
             return "研究质量和买点状态同时支持行动，但仍需按仓位和失效条件控制风险。"
         if timing_label == "Avoid" or research_value < 45:
@@ -508,8 +595,8 @@ class ReportGenerator:
     def _get_current_action(
         cls,
         timing_label: str,
-        research_value: float,
-        potential: float,
+        research_value,
+        potential,
         technicals: Dict,
     ) -> str:
         rsi = technicals.get("rsi_14")
@@ -525,16 +612,16 @@ class ReportGenerator:
             return "不追高，等待过热缓解"
         if potential and potential < 5:
             return "目标价空间不足，等待更好风险收益"
-        if research_value >= 60:
+        if research_value is not None and research_value >= 60:
             return "继续研究，等待 Timing 明确"
         return "补充数据后再判断"
 
     @classmethod
     def _get_main_tension(
         cls,
-        research_value: float,
+        research_value,
         timing_label: str,
-        potential: float,
+        potential,
         technicals: Dict,
         fundamentals: Dict,
     ) -> str:
@@ -544,11 +631,19 @@ class ReportGenerator:
         pe_forward = fundamentals.get("pe_forward")
         revenue_growth = cls._percent_value(fundamentals.get("revenue_growth"))
 
-        if research_value >= 60 and timing_label in {"Wait", "Watch"}:
+        if (
+            research_value is not None
+            and research_value >= 60
+            and timing_label in {"Wait", "Watch"}
+        ):
             return "公司质量尚可，但买点质量不足"
         if trend_short == "BULLISH" and (rsi is not None and rsi >= 70):
             return "趋势强，但短线过热"
-        if revenue_growth and revenue_growth > 15 and ((ps and ps > 10) or (pe_forward and pe_forward > 35)):
+        if (
+            revenue_growth
+            and revenue_growth > 15
+            and ((ps and ps > 10) or (pe_forward and pe_forward > 35))
+        ):
             return "成长性较好，但估值压力偏高"
         if potential and potential < 5:
             return "市场预期偏乐观，但目标价空间不足"
@@ -559,7 +654,7 @@ class ReportGenerator:
     @classmethod
     def _get_primary_risk(
         cls,
-        potential: float,
+        potential,
         technicals: Dict,
         fundamentals: Dict,
         liquidity: Dict,
@@ -589,7 +684,7 @@ class ReportGenerator:
     def _format_key_judgments(
         cls,
         price: float,
-        potential: float,
+        potential,
         technicals: Dict,
         fundamentals: Dict,
         liquidity: Dict,
@@ -611,7 +706,9 @@ class ReportGenerator:
 
         if trend_short == "BULLISH" and trend_mid == "BULLISH":
             if rsi is not None and rsi >= 70:
-                judgments.append(f"趋势较强，但 RSI {rsi:.1f} 已过热，短线不适合直接追高。")
+                judgments.append(
+                    f"趋势较强，但 RSI {rsi:.1f} 已过热，短线不适合直接追高。"
+                )
             else:
                 judgments.append("短期和中期趋势均偏多，买点质量取决于回调和触发条件。")
         elif trend_short == "BEARISH" and trend_mid == "BULLISH":
@@ -619,20 +716,32 @@ class ReportGenerator:
 
         if potential:
             if potential < 5:
-                judgments.append(f"目标价隐含空间仅 {potential:+.1f}%，当前风险收益不够宽。")
+                judgments.append(
+                    f"目标价隐含空间仅 {potential:+.1f}%，当前风险收益不够宽。"
+                )
             elif potential > 25:
-                judgments.append(f"目标价隐含空间 {potential:+.1f}%，估值预期仍有上行余地。")
+                judgments.append(
+                    f"目标价隐含空间 {potential:+.1f}%，估值预期仍有上行余地。"
+                )
 
-        if revenue_growth is not None or gross_margin is not None or free_cashflow is not None:
+        if (
+            revenue_growth is not None
+            or gross_margin is not None
+            or free_cashflow is not None
+        ):
             quality_parts = []
             if revenue_growth is not None:
                 quality_parts.append(f"营收增长 {revenue_growth:+.1f}%")
             if gross_margin is not None:
                 quality_parts.append(f"毛利率 {gross_margin:.1f}%")
             if free_cashflow is not None:
-                quality_parts.append("自由现金流为正" if free_cashflow > 0 else "自由现金流为负")
+                quality_parts.append(
+                    "自由现金流为正" if free_cashflow > 0 else "自由现金流为负"
+                )
             if quality_parts:
-                judgments.append("基本面质量信号：" + "，".join(quality_parts[:3]) + "。")
+                judgments.append(
+                    "基本面质量信号：" + "，".join(quality_parts[:3]) + "。"
+                )
 
         if (ps and ps > 10) or (pe_forward and pe_forward > 35):
             valuation_parts = []
@@ -644,9 +753,13 @@ class ReportGenerator:
 
         if daily_dollar_volume:
             if daily_dollar_volume >= 50_000_000:
-                judgments.append(f"流动性充足，日均成交额约 {cls._format_large_money(daily_dollar_volume)}。")
+                judgments.append(
+                    f"流动性充足，日均成交额约 {cls._format_large_money(daily_dollar_volume)}。"
+                )
             elif daily_dollar_volume < 10_000_000:
-                judgments.append(f"流动性偏弱，日均成交额约 {cls._format_large_money(daily_dollar_volume)}。")
+                judgments.append(
+                    f"流动性偏弱，日均成交额约 {cls._format_large_money(daily_dollar_volume)}。"
+                )
 
         if short_pct and short_pct * 100 > 10:
             judgments.append(f"做空比例 {short_pct * 100:.1f}%，波动风险需要单独管理。")
@@ -685,9 +798,11 @@ class ReportGenerator:
         return "\n".join(lines[:3])
 
     @classmethod
-    def _format_chart_gallery(cls, stock_code: str, market_data: Dict) -> str:
+    def _format_chart_gallery(
+        cls, stock_code: str, market_data: Dict, wiki_base=None
+    ) -> str:
         charts = []
-        wyckoff_chart = cls._format_wyckoff_chart(stock_code)
+        wyckoff_chart = cls._format_wyckoff_chart(stock_code, wiki_base)
         if wyckoff_chart:
             charts.append(wyckoff_chart)
 
@@ -701,7 +816,7 @@ class ReportGenerator:
                 title = Path(path).stem
                 alt = title
 
-            markdown_path = cls._chart_markdown_path(path)
+            markdown_path = cls._chart_markdown_path(path, wiki_base)
             if markdown_path:
                 charts.append(f"\n### {title}\n![{alt}]({markdown_path})")
 
@@ -710,15 +825,28 @@ class ReportGenerator:
         return "\n\n".join(charts)
 
     @classmethod
-    def _format_opening_conclusion(cls, stock_code: str, stock_info: Dict, fundamentals: Dict, technicals: Dict, research_score=None, timing_state=None) -> str:
+    def _format_opening_conclusion(
+        cls,
+        stock_code: str,
+        stock_info: Dict,
+        fundamentals: Dict,
+        technicals: Dict,
+        research_score=None,
+        timing_state=None,
+    ) -> str:
         name = stock_info.get("name") or stock_code
         industry = stock_info.get("industry") or stock_info.get("sector") or "业务"
         price = stock_info.get("price") or 0
-        pe = fundamentals.get("pe_forward") or fundamentals.get("pe_ttm") or fundamentals.get("trailing_pe")
+        pe = (
+            fundamentals.get("pe_forward")
+            or fundamentals.get("pe_ttm")
+            or fundamentals.get("trailing_pe")
+        )
         pb = fundamentals.get("pb")
         target = fundamentals.get("target_mean_price") or 0
         support = technicals.get("support_20d") or 0
         potential = (target / price - 1) * 100 if price and target else 0
+        ccy = cls._currency_symbol(stock_code, stock_info)
 
         timing_label = getattr(timing_state, "state", "N/A")
         research_value = getattr(research_score, "total_adjusted_score", None)
@@ -733,16 +861,21 @@ class ReportGenerator:
         else:
             action_word = "回避"
 
-        price_text = f"${price:,.2f}" if price else "N/A"
+        price_text = f"{ccy}{price:,.2f}" if price else "N/A"
         pe_text = f"{float(pe):.2f} 倍" if pe else "N/A"
         pb_text = f"{float(pb):.2f} 倍" if pb else "N/A"
-        entry_text = f"${support:,.2f}" if support else "等待技术触发"
-        target_text = f"${target:,.2f}" if target else "待分析师目标价/估值模型确认"
+        entry_text = f"{ccy}{support:,.2f}" if support else "等待技术触发"
+        target_text = f"{ccy}{target:,.2f}" if target else "待分析师目标价/估值模型确认"
+
+        if action_word == "建仓":
+            # 只有 Timing=Ready 时才给出具体价位；目标价明确标注来自分析师共识
+            tail = f"建议建仓价格 {entry_text}，目标价格（分析师共识）{target_text}。"
+        else:
+            tail = "暂不给出建仓价位，等待触发条件确认后再评估。"
 
         return (
             f"{name} 是一家{industry}公司，当前股价 {price_text}，"
-            f"PE {pe_text}，PB {pb_text}，经过分析建议{action_word}，"
-            f"建议建仓价格 {entry_text}，目标价格 {target_text}。"
+            f"PE {pe_text}，PB {pb_text}，经过分析建议{action_word}，{tail}"
         )
 
     @classmethod
@@ -781,9 +914,17 @@ class ReportGenerator:
             "|---|---:|---|",
         ]
         for dim in research_score.dimensions.values():
-            evidence = "; ".join((dim.data_evidence + dim.obsidian_evidence)[:2]) or dim.adjustment_reason or "证据不足"
-            lines.append(f"| {dim.name} | {dim.adjusted_score:.1f}/10 | {evidence.replace('|', '/')[:80]} |")
-        lines.append(f"| **综合** | **{research_score.total_adjusted_score:.1f}/100** | **{research_score.verdict} / {research_score.confidence}** |")
+            evidence = (
+                "; ".join((dim.data_evidence + dim.obsidian_evidence)[:2])
+                or dim.adjustment_reason
+                or "证据不足"
+            )
+            lines.append(
+                f"| {dim.name} | {dim.adjusted_score:.1f}/10 | {evidence.replace('|', '/')[:80]} |"
+            )
+        lines.append(
+            f"| **综合** | **{research_score.total_adjusted_score:.1f}/100** | **{research_score.verdict} / {research_score.confidence}** |"
+        )
         return "\n".join(lines)
 
     @classmethod
@@ -791,50 +932,60 @@ class ReportGenerator:
         """第二部分：技术分析（已合并到第一部分）"""
         return ""
 
-
     @classmethod
     def _section_3_fundamental(cls, fundamentals: Dict) -> str:
         """第三部分：基本面分析（已合并到第一部分）"""
         return ""
 
     @classmethod
-    def _section_4_market_structure(cls, liquidity: Dict, options: Dict, web_search: Dict = None) -> str:
+    def _section_4_market_structure(
+        cls, liquidity: Dict, options: Dict, web_search: Dict = None
+    ) -> str:
         """第四部分：市场结构（已合并到第一部分）"""
         return ""
 
     @classmethod
-    def _section_5_catalysts(cls, fundamentals: Dict, earnings: Dict, web_search: Dict) -> str:
+    def _section_5_catalysts(
+        cls, fundamentals: Dict, earnings: Dict, web_search: Dict
+    ) -> str:
         """第五部分：催化因素（已合并到第一部分）"""
         return ""
 
     @classmethod
-    def _section_6_trading_plan(cls, stock_info: Dict, technicals: Dict, fundamentals: Dict, wyckoff: Dict) -> str:
+    def _section_6_trading_plan(
+        cls, stock_info: Dict, technicals: Dict, fundamentals: Dict, wyckoff: Dict
+    ) -> str:
         """第六部分：操作建议（已合并到第一部分）"""
         return ""
 
     # ========== 辅助方法：信号判定 ==========
 
     @classmethod
-    def _format_wyckoff_chart(cls, stock_code: str) -> str:
+    def _format_wyckoff_chart(cls, stock_code: str, wiki_base=None) -> str:
         chart_name = f"{stock_code.replace('.', '_')}_wyckoff.png"
-        chart_path = Config.WIKI_BASE_DIR / "Charts" / chart_name
+        base = Path(wiki_base) if wiki_base else Config.WIKI_BASE_DIR
+        chart_path = base / "Charts" / chart_name
         if not chart_path.exists():
             return ""
-        markdown_path = cls._chart_markdown_path(chart_path)
+        markdown_path = cls._chart_markdown_path(chart_path, wiki_base)
         if not markdown_path:
             return ""
         return f"\n### Wyckoff 图表\n![Wyckoff分析]({markdown_path})"
 
     @classmethod
-    def _chart_markdown_path(cls, chart_path) -> str:
+    def _chart_markdown_path(cls, chart_path, wiki_base=None) -> str:
         if not chart_path:
             return ""
         chart_path = Path(chart_path)
         if not chart_path.is_absolute():
-            chart_path = Config.WIKI_BASE_DIR / chart_path
+            base = Path(wiki_base) if wiki_base else Config.WIKI_BASE_DIR
+            chart_path = base / chart_path
         if not chart_path.exists():
             return ""
-        rel_path = Path(os.path.relpath(chart_path, Config.get_wiki_dir()))
+        wiki_dir = (
+            Path(wiki_base) if wiki_base else Config.WIKI_BASE_DIR
+        ) / Config.WIKI_SUBDIR
+        rel_path = Path(os.path.relpath(chart_path, wiki_dir))
         return rel_path.as_posix()
 
     @classmethod
@@ -843,10 +994,10 @@ class ReportGenerator:
             return "- 暂无结构化 Obsidian 证据"
         lines = []
         for item in list(evidence)[:5]:
-            claim = getattr(item, 'claim', '')[:100]
-            evidence_type = getattr(item, 'evidence_type', '-')
-            credibility = getattr(item, 'credibility', '-')
-            impact = getattr(item, 'score_impact', '-')
+            claim = getattr(item, "claim", "")[:100]
+            evidence_type = getattr(item, "evidence_type", "-")
+            credibility = getattr(item, "credibility", "-")
+            impact = getattr(item, "score_impact", "-")
             lines.append(f"- [{evidence_type}/{credibility}/{impact}] {claim}")
         return "\n".join(lines)
 
@@ -855,8 +1006,8 @@ class ReportGenerator:
         if not timing_state:
             return "- Timing State 暂不可用"
         lines = [f"- **状态**：{getattr(timing_state, 'state', 'N/A')}"]
-        reasons = getattr(timing_state, 'reasons', []) or []
-        triggers = getattr(timing_state, 'entry_triggers', []) or []
+        reasons = getattr(timing_state, "reasons", []) or []
+        triggers = getattr(timing_state, "entry_triggers", []) or []
         if reasons:
             lines.append(f"- **主因**：{reasons[0]}")
         if triggers:
@@ -865,36 +1016,78 @@ class ReportGenerator:
 
     @classmethod
     def _get_score_emoji(cls, score: float) -> str:
-        score = score or 0
-        return cls.EMOJI['positive'] if score >= 70 else cls.EMOJI['neutral'] if score >= 50 else cls.EMOJI['negative']
+        if score is None:
+            return "⚪"
+        # 与 verdict 阈值对齐：≥75 高信心 / 45-75 中间 / <45 Pass
+        return (
+            cls.EMOJI["positive"]
+            if score >= 75
+            else cls.EMOJI["neutral"]
+            if score >= 45
+            else cls.EMOJI["negative"]
+        )
 
     @classmethod
-    def _get_valuation_signal(cls, potential: float) -> str:
-        return f"{cls.EMOJI['positive']} 低估" if potential > 50 else f"{cls.EMOJI['neutral']} 合理" if potential > 0 else f"{cls.EMOJI['negative']} 高估"
+    def _get_valuation_signal(cls, potential) -> str:
+        if potential is None:
+            return f"{cls.EMOJI['neutral']} 无目标价数据"
+        return (
+            f"{cls.EMOJI['positive']} 低估"
+            if potential > 50
+            else f"{cls.EMOJI['neutral']} 合理"
+            if potential > 0
+            else f"{cls.EMOJI['negative']} 高估"
+        )
 
     @classmethod
-    def _get_potential_emoji(cls, potential: float) -> str:
-        return f"{cls.EMOJI['rocket']}" if potential > 50 else f"➡️" if potential > 0 else f"{cls.EMOJI['warning']}"
+    def _get_potential_emoji(cls, potential) -> str:
+        if potential is None:
+            return "⚪"
+        return (
+            f"{cls.EMOJI['rocket']}"
+            if potential > 50
+            else f"➡️"
+            if potential > 0
+            else f"{cls.EMOJI['warning']}"
+        )
 
     @classmethod
     def _get_trend_emoji(cls, trend: str) -> str:
-        return f"{cls.EMOJI['bullish']} 看多" if trend == "BULLISH" else f"{cls.EMOJI['bearish']} 看空"
+        if trend == "BULLISH":
+            return f"{cls.EMOJI['bullish']} 看多"
+        if trend == "BEARISH":
+            return f"{cls.EMOJI['bearish']} 看空"
+        return f"{cls.EMOJI['neutral']} 中性"
 
     @classmethod
     def _get_rsi_signal(cls, rsi: float) -> str:
         if rsi is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 超卖" if rsi < 30 else f"{cls.EMOJI['negative']} 超买" if rsi > 70 else f"{cls.EMOJI['neutral']} 中性"
+        return (
+            f"{cls.EMOJI['positive']} 超卖"
+            if rsi < 30
+            else f"{cls.EMOJI['negative']} 超买"
+            if rsi > 70
+            else f"{cls.EMOJI['neutral']} 中性"
+        )
 
     @classmethod
     def _get_short_signal(cls, short_pct: float) -> str:
-        return f"{cls.EMOJI['warning']} 高" if short_pct > 10 else f"{cls.EMOJI['positive']} 正常"
+        return (
+            f"{cls.EMOJI['warning']} 高"
+            if short_pct > 10
+            else f"{cls.EMOJI['positive']} 正常"
+        )
 
     @classmethod
     def _get_macd_signal(cls, macd_hist: float) -> str:
         if macd_hist is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 金叉" if macd_hist > 0 else f"{cls.EMOJI['negative']} 死叉"
+        return (
+            f"{cls.EMOJI['positive']} 金叉"
+            if macd_hist > 0
+            else f"{cls.EMOJI['negative']} 死叉"
+        )
 
     @classmethod
     def _get_kdj_signal(cls, k: float, d: float) -> str:
@@ -906,73 +1099,153 @@ class ReportGenerator:
     def _get_pe_signal(cls, pe: float) -> str:
         if pe is None or pe == 0:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['warning']} 亏损" if pe < 0 else f"{cls.EMOJI['positive']} 合理" if pe < 20 else f"{cls.EMOJI['neutral']} 偏高"
+        return (
+            f"{cls.EMOJI['warning']} 亏损"
+            if pe < 0
+            else f"{cls.EMOJI['positive']} 合理"
+            if pe < 20
+            else f"{cls.EMOJI['neutral']} 偏高"
+        )
 
     @classmethod
     def _get_pb_signal(cls, pb: float) -> str:
         if pb is None or pb == 0:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 低" if pb < 1 else f"{cls.EMOJI['neutral']} 中等" if pb < 3 else f"{cls.EMOJI['negative']} 高"
+        return (
+            f"{cls.EMOJI['positive']} 低"
+            if pb < 1
+            else f"{cls.EMOJI['neutral']} 中等"
+            if pb < 3
+            else f"{cls.EMOJI['negative']} 高"
+        )
 
     @classmethod
     def _get_ps_signal(cls, ps: float) -> str:
         if ps is None or ps == 0:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 低" if ps < 1 else f"{cls.EMOJI['neutral']} 中等" if ps < 3 else f"{cls.EMOJI['negative']} 高"
+        return (
+            f"{cls.EMOJI['positive']} 低"
+            if ps < 1
+            else f"{cls.EMOJI['neutral']} 中等"
+            if ps < 3
+            else f"{cls.EMOJI['negative']} 高"
+        )
 
     @classmethod
     def _get_roe_signal(cls, roe: float) -> str:
         if roe is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 优秀" if roe > 15 else f"{cls.EMOJI['neutral']} 一般" if roe > 0 else f"{cls.EMOJI['negative']} 亏损"
+        return (
+            f"{cls.EMOJI['positive']} 优秀"
+            if roe > 15
+            else f"{cls.EMOJI['neutral']} 一般"
+            if roe > 0
+            else f"{cls.EMOJI['negative']} 亏损"
+        )
 
     @classmethod
     def _get_roa_signal(cls, roa: float) -> str:
         if roa is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 优秀" if roa > 10 else f"{cls.EMOJI['neutral']} 一般" if roa > 0 else f"{cls.EMOJI['negative']} 亏损"
+        return (
+            f"{cls.EMOJI['positive']} 优秀"
+            if roa > 10
+            else f"{cls.EMOJI['neutral']} 一般"
+            if roa > 0
+            else f"{cls.EMOJI['negative']} 亏损"
+        )
 
     @classmethod
     def _get_margin_signal(cls, margin: float) -> str:
         if margin is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 高" if margin > 40 else f"{cls.EMOJI['neutral']} 中等" if margin > 20 else f"{cls.EMOJI['negative']} 低"
+        return (
+            f"{cls.EMOJI['positive']} 高"
+            if margin > 40
+            else f"{cls.EMOJI['neutral']} 中等"
+            if margin > 20
+            else f"{cls.EMOJI['negative']} 低"
+        )
 
     @classmethod
     def _get_growth_emoji(cls, growth: float) -> str:
         if growth is None:
             return f"{cls.EMOJI['neutral']}"
-        return f"{cls.EMOJI['rocket']}" if growth > 20 else f"➡️" if growth > 0 else f"{cls.EMOJI['warning']}"
+        return (
+            f"{cls.EMOJI['rocket']}"
+            if growth > 20
+            else f"➡️"
+            if growth > 0
+            else f"{cls.EMOJI['warning']}"
+        )
 
     @classmethod
     def _get_current_ratio_signal(cls, ratio: float) -> str:
         if ratio is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 健康" if ratio > 1.5 else f"{cls.EMOJI['neutral']} 一般" if ratio > 1 else f"{cls.EMOJI['negative']} 紧张"
+        return (
+            f"{cls.EMOJI['positive']} 健康"
+            if ratio > 1.5
+            else f"{cls.EMOJI['neutral']} 一般"
+            if ratio > 1
+            else f"{cls.EMOJI['negative']} 紧张"
+        )
 
     @classmethod
     def _get_fcf_signal(cls, fcf: float) -> str:
         if fcf is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['positive']} 正向" if fcf > 0 else f"{cls.EMOJI['negative']} 烧钱"
+        return (
+            f"{cls.EMOJI['positive']} 正向"
+            if fcf > 0
+            else f"{cls.EMOJI['negative']} 烧钱"
+        )
 
     @classmethod
     def _get_days_to_cover_signal(cls, days: float) -> str:
         if days is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['warning']} 流动性差" if days > 5 else f"{cls.EMOJI['positive']} 正常"
+        return (
+            f"{cls.EMOJI['warning']} 流动性差"
+            if days > 5
+            else f"{cls.EMOJI['positive']} 正常"
+        )
 
     @classmethod
     def _get_volume_signal(cls, volume: float) -> str:
         if volume is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['warning']} 低" if volume < 2 else f"{cls.EMOJI['positive']} 正常"
+        return (
+            f"{cls.EMOJI['warning']} 低"
+            if volume < 2
+            else f"{cls.EMOJI['positive']} 正常"
+        )
 
     @classmethod
     def _get_putcall_signal(cls, ratio: float) -> str:
         if ratio is None:
             return f"{cls.EMOJI['neutral']} 无数据"
-        return f"{cls.EMOJI['negative']} 极度看空" if ratio > 10 else f"{cls.EMOJI['neutral']} 看空" if ratio > 1 else f"{cls.EMOJI['positive']} 看多"
+        return (
+            f"{cls.EMOJI['negative']} 极度看空"
+            if ratio > 10
+            else f"{cls.EMOJI['neutral']} 看空"
+            if ratio > 1
+            else f"{cls.EMOJI['positive']} 看多"
+        )
+
+    @classmethod
+    def _currency_symbol(cls, stock_code: str, stock_info: Dict) -> str:
+        """按市场返回货币符号：USD→$、HKD→HK$、CNY/CNH→¥，避免 HK/CN 标的显示成美元。"""
+        currency = str((stock_info or {}).get("currency") or "").upper()
+        mapping = {"USD": "$", "HKD": "HK$", "CNY": "¥", "CNH": "¥"}
+        if currency in mapping:
+            return mapping[currency]
+        code = (stock_code or "").upper()
+        if code.endswith(".HK"):
+            return "HK$"
+        if code.startswith(("SH", "SZ")) or code.endswith((".SH", ".SZ", ".SS")):
+            return "¥"
+        return "$"
 
     @classmethod
     def _percent_value(cls, value):
@@ -985,23 +1258,34 @@ class ReportGenerator:
     def _format_large_money(cls, value) -> str:
         if value is None:
             return "N/A"
-        return f"${float(value) / 1_000_000:.1f}M"
+        v = float(value)
+        if abs(v) >= 1e12:
+            return f"${v / 1e12:.2f}T"
+        if abs(v) >= 1e9:
+            return f"${v / 1e9:.1f}B"
+        return f"${v / 1e6:.1f}M"
 
     @classmethod
-    def _get_positive_catalysts(cls, fundamentals: Dict, earnings: Dict, price: float = 0) -> str:
+    def _get_positive_catalysts(
+        cls, fundamentals: Dict, earnings: Dict, price: float = 0
+    ) -> str:
         """生成向上催化因素"""
         catalysts = []
 
         # 财报
-        history = earnings.get('history', [])
+        history = earnings.get("history", [])
         if history:
-            catalysts.append(f"1. **财报超预期**：下次财报 {history[0].get('date', 'N/A')}")
+            catalysts.append(
+                f"1. **财报超预期**：下次财报 {history[0].get('date', 'N/A')}"
+            )
 
         # 分析师目标价
-        target_mean = fundamentals.get('target_mean_price') or 0
+        target_mean = fundamentals.get("target_mean_price") or 0
         if target_mean > 0 and price and price > 0:
             potential = (target_mean / price - 1) * 100
-            catalysts.append(f"2. **分析师上调**：目标价均值 ${target_mean:.2f} 暗示 {potential:+.1f}% 空间")
+            catalysts.append(
+                f"2. **分析师上调**：目标价均值 ${target_mean:.2f} 暗示 {potential:+.1f}% 空间"
+            )
 
         return "\n".join(catalysts) if catalysts else "暂无"
 
@@ -1011,25 +1295,35 @@ class ReportGenerator:
         risks = []
 
         # 流动性
-        daily_volume = (liquidity.get('daily_dollar_volume') or 0) / 1_000_000
+        daily_volume = (liquidity.get("daily_dollar_volume") or 0) / 1_000_000
         if daily_volume < 2:
-            risks.append(f"1. **流动性风险**：日均成交额 ${daily_volume:.1f}M 较低")
+            risks.append(f"**流动性风险**：日均成交额 ${daily_volume:.1f}M 较低")
 
         # 做空
-        short_pct = (liquidity.get('short_percent_float') or 0) * 100
+        short_pct = (liquidity.get("short_percent_float") or 0) * 100
         if short_pct > 5:
-            risks.append(f"2. **做空挤压风险**")
+            risks.append(f"**做空比例偏高 ({short_pct:.1f}%)**：双向波动可能加剧")
 
         # 现金流
-        fcf = (fundamentals.get('free_cashflow') or 0) / 1_000_000
+        fcf = (fundamentals.get("free_cashflow") or 0) / 1_000_000
         if fcf < 0:
-            risks.append(f"3. **现金流压力**：自由现金流 ${fcf:.1f}M")
+            risks.append(f"**现金流压力**：自由现金流 ${fcf:.1f}M")
 
-        return "\n".join(risks) if risks else "暂无"
+        return (
+            "\n".join(f"{i}. {risk}" for i, risk in enumerate(risks, 1))
+            if risks
+            else "暂无"
+        )
 
     @classmethod
     def _get_action_emoji(cls, score: float) -> str:
-        return f"{cls.EMOJI['positive']} 建仓" if score >= 60 else f"{cls.EMOJI['neutral']} 观望" if score >= 40 else f"{cls.EMOJI['negative']} 回避"
+        return (
+            f"{cls.EMOJI['positive']} 建仓"
+            if score >= 60
+            else f"{cls.EMOJI['neutral']} 观望"
+            if score >= 40
+            else f"{cls.EMOJI['negative']} 回避"
+        )
 
     @classmethod
     def _get_timing_action(cls, timing_label: str) -> str:
@@ -1042,11 +1336,11 @@ class ReportGenerator:
         return mapping.get(timing_label, f"{cls.EMOJI['neutral']} 未知")
 
     @classmethod
-    def _get_timing_position(cls, timing_label: str, research_score: float) -> str:
+    def _get_timing_position(cls, timing_label: str, research_score) -> str:
         if timing_label == "Ready":
-            if research_score >= 75:
+            if research_score is not None and research_score >= 75:
                 return "3-5%"
-            if research_score >= 60:
+            if research_score is not None and research_score >= 60:
                 return "2-3%"
             return "≤1%"
         if timing_label == "Wait":
@@ -1068,6 +1362,7 @@ class ReportGenerator:
         """生成情绪分析"""
         try:
             from data.sentiment_analyzer import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
             result = analyzer.analyze(web_search)
             return analyzer.format_result(result)
@@ -1076,15 +1371,12 @@ class ReportGenerator:
 
     @classmethod
     def _get_trading_grid(
-        cls,
-        stock_info: Dict,
-        technicals: Dict,
-        fundamentals: Dict,
-        wyckoff: Dict
+        cls, stock_info: Dict, technicals: Dict, fundamentals: Dict, wyckoff: Dict
     ) -> str:
         """生成交易网格"""
         try:
             from analyzer.trading_grid import TradingGridGenerator
+
             generator = TradingGridGenerator()
             levels = generator.generate(stock_info, technicals, fundamentals, wyckoff)
             return generator.format_grid(levels)
@@ -1101,9 +1393,20 @@ class ReportGenerator:
             lines = []
             for item in list(items or [])[:limit]:
                 if isinstance(item, dict):
-                    text = item.get(key) or item.get("claim") or item.get("hypothesis") or item.get("basis") or item.get("prompt_role") or ""
+                    text = (
+                        item.get(key)
+                        or item.get("claim")
+                        or item.get("hypothesis")
+                        or item.get("basis")
+                        or item.get("prompt_role")
+                        or ""
+                    )
                     if key == "claim" and item.get("source"):
-                        text = f"{text}（{item.get('source')}）" if text else str(item.get("source"))
+                        text = (
+                            f"{text}（{item.get('source')}）"
+                            if text
+                            else str(item.get("source"))
+                        )
                 else:
                     text = str(item)
                 text = text.strip()
@@ -1124,7 +1427,9 @@ class ReportGenerator:
         industry = subject.get("industry") or "-"
         peer_count = subject.get("peer_count")
 
-        lines.append(f"- **业务边界**：{company} 主要按 {business_model} 理解，处于 {sector} / {industry} 语境。")
+        lines.append(
+            f"- **业务边界**：{company} 主要按 {business_model} 理解，处于 {sector} / {industry} 语境。"
+        )
         if peer_count is not None:
             lines.append(f"- **同行样本**：{peer_count} 家")
 
@@ -1147,7 +1452,10 @@ class ReportGenerator:
             if verify:
                 lines.append(f"- **未来最值得验证**：{verify}")
             if verdict:
-                lines.append(f"- **最终判断**：{verdict}" + (f"（{rationale}）" if rationale else ""))
+                lines.append(
+                    f"- **最终判断**：{verdict}"
+                    + (f"（{rationale}）" if rationale else "")
+                )
             cyclical_caveat = conclusion.get("cyclical_caveat")
             if cyclical_caveat:
                 lines.append(f"- **周期性提示**：{cyclical_caveat}")
@@ -1163,12 +1471,19 @@ class ReportGenerator:
             lines.extend(["", "#### 同行相对强弱"])
             if peer_strength.get("summary"):
                 lines.append(f"- {peer_strength['summary']}")
-            label_map = {"market_cap": "市值", "gross_margin": "毛利率", "revenue_growth": "营收增速", "roe": "ROE"}
+            label_map = {
+                "market_cap": "市值",
+                "gross_margin": "毛利率",
+                "revenue_growth": "营收增速",
+                "roe": "ROE",
+            }
             for comp in peer_strength.get("comparisons", [])[:4]:
                 metric_label = label_map.get(comp.get("metric"), comp.get("metric", ""))
                 direction = "高于" if comp.get("direction") == "above" else "低于"
                 if comp.get("metric") == "market_cap":
-                    lines.append(f"- {metric_label}{direction}同行中位数，约 {comp.get('ratio_vs_peer_median')}x")
+                    lines.append(
+                        f"- {metric_label}{direction}同行中位数，约 {comp.get('ratio_vs_peer_median')}x"
+                    )
                 else:
                     lines.append(
                         f"- {metric_label}{direction}同行中位数约 {abs(comp.get('diff_percentage_points', 0)):.1f} 个百分点"
@@ -1183,7 +1498,9 @@ class ReportGenerator:
                 tier = (budget_tiers.get("tiers") or {}).get(tier_key) or {}
                 if not tier:
                     continue
-                lines.append(f"- **{tier_labels.get(tier_key, tier_key)}**：约 ${tier.get('budget', 0) / 1e6:.0f}M")
+                lines.append(
+                    f"- **{tier_labels.get(tier_key, tier_key)}**：约 ${tier.get('budget', 0) / 1e6:.0f}M"
+                )
                 lines.append(f"  - 首年：{tier.get('first_year_focus', '')}")
                 lines.append(f"  - 三年可达：{tier.get('realistic_3_year_reach', '')}")
                 lines.append(f"  - 建议姿态：{tier.get('recommended_angle', '')}")
@@ -1231,8 +1548,14 @@ class ReportGenerator:
                 lines.extend(_render_list(section.get("attack_vectors"), limit=4))
                 lines.extend(_render_list(section.get("defense_signals"), limit=4))
             elif key == "industry_researcher":
-                lines.extend(_render_list(section.get("structure_observations"), limit=4))
-                lines.extend(_render_list(section.get("profit_pool_hypotheses"), limit=3, key="claim"))
+                lines.extend(
+                    _render_list(section.get("structure_observations"), limit=4)
+                )
+                lines.extend(
+                    _render_list(
+                        section.get("profit_pool_hypotheses"), limit=3, key="claim"
+                    )
+                )
             else:
                 lines.extend(_render_list(section.get("durability_signals"), limit=4))
                 lines.extend(_render_list(section.get("fragility_signals"), limit=4))
@@ -1250,7 +1573,7 @@ class ReportGenerator:
             return "> 护城河分析暂不可用"
 
         # 处理 dataclass 或 dict 格式
-        if hasattr(moat, 'dimensions'):
+        if hasattr(moat, "dimensions"):
             # Dataclass 对象
             dimensions = moat.dimensions
             overall_score = moat.overall_score
@@ -1275,7 +1598,7 @@ class ReportGenerator:
         ]
 
         for d in dimensions:
-            if hasattr(d, 'score'):
+            if hasattr(d, "score"):
                 name, score, rating, evidence = d.name, d.score, d.rating, d.evidence
             else:
                 name = d.get("name", "-")
@@ -1284,9 +1607,7 @@ class ReportGenerator:
                 evidence = d.get("evidence", "-")
 
             emoji = "🟢" if score >= 7 else "🟡" if score >= 5 else "🔴"
-            lines.append(
-                f"| {name} | {emoji} {score:.1f} | {rating} | {evidence} |"
-            )
+            lines.append(f"| {name} | {emoji} {score:.1f} | {rating} | {evidence} |")
 
         lines.append("")
         lines.append(f"**总结**: {summary}")
