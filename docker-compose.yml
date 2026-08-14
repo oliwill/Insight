@@ -1,0 +1,12 @@
+# Insight Web 平台 —— Docker Compose 单机部署
+services:
+  web:
+    build: .
+    container_name: insight-web
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      # 持久化：SQLite + 用户 vault + 缓存
+      - ./data:/app/data
+    restart: unless-stopped

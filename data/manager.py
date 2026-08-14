@@ -2,6 +2,7 @@
 数据管理器 - 统一数据接入层
 数据源: 长桥API (美股/港股) + Yahoo Finance (备用/基本面)
 """
+
 import os
 import sys
 import io
@@ -37,13 +38,19 @@ def _configure_yfinance_cache(cache_dir: Optional[Path] = None) -> Optional[Path
     keeping it under ``tmp_analysis`` also ensures it remains generated local state.
     """
     raw_dir = cache_dir or os.getenv("YFINANCE_CACHE_DIR")
-    target = Path(raw_dir).expanduser() if raw_dir else Path(__file__).resolve().parents[1] / "tmp_analysis" / "yfinance_cache"
+    target = (
+        Path(raw_dir).expanduser()
+        if raw_dir
+        else Path(__file__).resolve().parents[1] / "tmp_analysis" / "yfinance_cache"
+    )
     try:
         target.mkdir(parents=True, exist_ok=True)
         cache_module = getattr(yf, "cache", None)
         setter = getattr(cache_module, "set_cache_location", None)
         if not callable(setter):
-            logger.warning("yfinance cache configuration API is unavailable; using its default cache path")
+            logger.warning(
+                "yfinance cache configuration API is unavailable; using its default cache path"
+            )
             return None
         setter(str(target))
         return target
@@ -86,12 +93,14 @@ def suppress_stdout():
         # Restore Python's sys.stdout after the file descriptor is restored.
         sys.stdout = old_stdout
 
+
 # 长桥SDK - lazy import to avoid debug output during module load
 LONGBRIDGE_AVAILABLE = False
 Config = None
 QuoteContext = None
 AdjustType = None
 Period = None
+
 
 def _import_longbridge():
     """Lazy import Longbridge SDK with stdout suppression"""
@@ -101,7 +110,12 @@ def _import_longbridge():
 
     try:
         with suppress_stdout():
-            from longbridge.openapi import Config as _Config, QuoteContext as _QuoteContext, AdjustType as _AdjustType, Period as _Period
+            from longbridge.openapi import (
+                Config as _Config,
+                QuoteContext as _QuoteContext,
+                AdjustType as _AdjustType,
+                Period as _Period,
+            )
         Config = _Config
         QuoteContext = _QuoteContext
         AdjustType = _AdjustType
@@ -109,12 +123,15 @@ def _import_longbridge():
         LONGBRIDGE_AVAILABLE = True
     except ImportError as e:
         LONGBRIDGE_AVAILABLE = False
-        logger.warning(f"longbridge SDK not installed ({e}), falling back to Yahoo Finance")
+        logger.warning(
+            f"longbridge SDK not installed ({e}), falling back to Yahoo Finance"
+        )
 
 
 @dataclass
 class StockInfo:
     """股票信息"""
+
     code: str
     name: str
     market: str  # 'US' | 'HK'
@@ -180,7 +197,7 @@ class LongBridgeClient:
             access_token = os.getenv("LONGBRIDGE_ACCESS_TOKEN")
 
             if all([app_key, app_secret, access_token]):
-                #Suppress stdout during Longbridge SDK initialization
+                # Suppress stdout during Longbridge SDK initialization
                 # to prevent debug tables from corrupting JSON output
                 with suppress_stdout():
                     config = Config.from_apikey(app_key, app_secret, access_token)
@@ -228,7 +245,9 @@ class LongBridgeClient:
             return f"{symbol[2:]}.SZ"
         return symbol
 
-    def _cli_call(self, args: List[str], timeout: Optional[int] = None) -> Optional[Any]:
+    def _cli_call(
+        self, args: List[str], timeout: Optional[int] = None
+    ) -> Optional[Any]:
         """执行 longbridge CLI 子命令，返回解析后的 JSON。
 
         - 复用 CLI 已登录的 OAuth token（无需三件套）。
@@ -254,7 +273,9 @@ class LongBridgeClient:
         if proc.returncode != 0:
             # 非零退出：可能是认证过期、符号无效、权限不足等。stderr 含原因。
             err = (proc.stderr or "").strip()
-            logger.warning(f"Longbridge CLI nonzero exit for {' '.join(args)}: {err[:200]}")
+            logger.warning(
+                f"Longbridge CLI nonzero exit for {' '.join(args)}: {err[:200]}"
+            )
             return None
         out = (proc.stdout or "").strip()
         if not out:
@@ -341,9 +362,7 @@ class LongBridgeClient:
 
     # ---------- 历史K线 ----------
 
-    def get_history(
-        self, symbol: str, days: int = 365
-    ) -> Optional[pd.DataFrame]:
+    def get_history(self, symbol: str, days: int = 365) -> Optional[pd.DataFrame]:
         """获取历史K线（前复权；SDK 优先，CLI 兜底）"""
         if not self.is_available():
             return None
@@ -360,17 +379,19 @@ class LongBridgeClient:
                     end=end,
                 )
                 if candles:
-                    df = pd.DataFrame([
-                        {
-                            "date": c.timestamp,
-                            "open": c.open,
-                            "high": c.high,
-                            "low": c.low,
-                            "close": c.close,
-                            "volume": c.volume,
-                        }
-                        for c in candles
-                    ])
+                    df = pd.DataFrame(
+                        [
+                            {
+                                "date": c.timestamp,
+                                "open": c.open,
+                                "high": c.high,
+                                "low": c.low,
+                                "close": c.close,
+                                "volume": c.volume,
+                            }
+                            for c in candles
+                        ]
+                    )
                     df["date"] = pd.to_datetime(df["date"])
                     df = df.sort_values("date").reset_index(drop=True)
                     return df
@@ -383,8 +404,16 @@ class LongBridgeClient:
         # CLI count 是根数；按 days 估算，留 20% 余量覆盖周末/假日
         count = max(int(days * 1.2), 30)
         data = self._cli_call(
-            ["kline", self._cli_symbol(symbol), "--period", "day",
-             "--count", str(count), "--adjust", "forward"],
+            [
+                "kline",
+                self._cli_symbol(symbol),
+                "--period",
+                "day",
+                "--count",
+                str(count),
+                "--adjust",
+                "forward",
+            ],
             timeout=30,
         )
         if not data or not isinstance(data, list) or not data:
@@ -393,14 +422,16 @@ class LongBridgeClient:
         for c in data:
             if not c.get("time"):
                 continue
-            rows.append({
-                "date": c.get("time"),
-                "open": self._to_float(c.get("open")),
-                "high": self._to_float(c.get("high")),
-                "low": self._to_float(c.get("low")),
-                "close": self._to_float(c.get("close")),
-                "volume": self._to_int(c.get("volume")),
-            })
+            rows.append(
+                {
+                    "date": c.get("time"),
+                    "open": self._to_float(c.get("open")),
+                    "high": self._to_float(c.get("high")),
+                    "low": self._to_float(c.get("low")),
+                    "close": self._to_float(c.get("close")),
+                    "volume": self._to_int(c.get("volume")),
+                }
+            )
         if not rows:
             return None
         df = pd.DataFrame(rows)
@@ -490,8 +521,12 @@ class LongBridgeClient:
 class DataManager:
     """数据管理器 - 长桥API优先，Yahoo Finance备用"""
 
-    def __init__(self, longbridge_client: Optional[LongBridgeClient] = None, yahoo_factory=None):
-        self.longbridge = longbridge_client if longbridge_client is not None else LongBridgeClient()
+    def __init__(
+        self, longbridge_client: Optional[LongBridgeClient] = None, yahoo_factory=None
+    ):
+        self.longbridge = (
+            longbridge_client if longbridge_client is not None else LongBridgeClient()
+        )
         self.yahoo_factory = yahoo_factory or yf.Ticker
         self._source_attempts: Dict[str, List[DataSourceAttempt]] = {}
         logger.info("DataManager initialized")
@@ -585,12 +620,18 @@ class DataManager:
             static = self.longbridge.get_static_info(symbol)
             if static:
                 quote = self.longbridge.get_quote(symbol)
-                results.append({
-                    "code": symbol,
-                    "name": static.get("name_cn") or static.get("name_en") or symbol,
-                    "market": "港股" if self.detect_market(symbol) == "HK" else "美股",
-                    "price": quote["price"] if quote else 0,
-                })
+                results.append(
+                    {
+                        "code": symbol,
+                        "name": static.get("name_cn")
+                        or static.get("name_en")
+                        or symbol,
+                        "market": "港股"
+                        if self.detect_market(symbol) == "HK"
+                        else "美股",
+                        "price": quote["price"] if quote else 0,
+                    }
+                )
 
         # Yahoo Finance 备用（美股用不带 .US 的代码）
         if not results:
@@ -599,12 +640,16 @@ class DataManager:
                 info = ticker.info
                 name = info.get("shortName") or info.get("longName") or symbol
                 if name and name != symbol:
-                    results.append({
-                        "code": symbol,
-                        "name": name,
-                        "market": "港股" if self.detect_market(symbol) == "HK" else "美股",
-                        "price": info.get("regularMarketPrice", 0),
-                    })
+                    results.append(
+                        {
+                            "code": symbol,
+                            "name": name,
+                            "market": "港股"
+                            if self.detect_market(symbol) == "HK"
+                            else "美股",
+                            "price": info.get("regularMarketPrice", 0),
+                        }
+                    )
             except Exception:
                 pass
 
@@ -629,7 +674,9 @@ class DataManager:
                     change_pct=quote["change_pct"],
                     currency={"HK": "HKD", "CN": "CNY"}.get(market, "USD"),
                 )
-            self._record_source_attempt("stock_info", "longbridge", "failed", "empty_or_failed")
+            self._record_source_attempt(
+                "stock_info", "longbridge", "failed", "empty_or_failed"
+            )
         else:
             self._record_source_attempt("stock_info", "longbridge", "unavailable")
 
@@ -637,11 +684,32 @@ class DataManager:
         info = self._get_yf_stock_info(symbol)
         status = "ok" if info and info.name != "Unknown" else "failed"
         detail = "" if status == "ok" else "empty_or_failed"
-        self._record_source_attempt("stock_info", "yahoo", status, detail, rows=1 if status == "ok" else 0)
+        self._record_source_attempt(
+            "stock_info", "yahoo", status, detail, rows=1 if status == "ok" else 0
+        )
         return info
 
-    def get_historical_data(self, code: str, period: str = "1y") -> Optional[pd.DataFrame]:
-        """获取历史行情"""
+    @staticmethod
+    def _cn_volume_to_shares(
+        df: Optional[pd.DataFrame], symbol: str
+    ) -> Optional[pd.DataFrame]:
+        """A 股行情数据源的成交量按「手」(1手=100股) 返回，统一为股。
+
+        交易所原始数据（Yahoo 与 Longbridge 均透传）对 SH/SZ 标的的 volume 字段是
+        手数，与美股/港股的「股」不一致；下游（成交额、换手率、流动性）按股计算，
+        故在此数据边界归一。US/HK 不受影响。
+        """
+        if df is None or df.empty or "volume" not in df.columns:
+            return df
+        if symbol.startswith("SH") or symbol.startswith("SZ"):
+            df = df.copy()
+            df["volume"] = df["volume"] * 100
+        return df
+
+    def get_historical_data(
+        self, code: str, period: str = "1y"
+    ) -> Optional[pd.DataFrame]:
+        """获取历史行情（A 股成交量统一为股）"""
         symbol = self.normalize_symbol(code)
         days_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "3y": 1095}
         days = days_map.get(period, 365)
@@ -650,9 +718,13 @@ class DataManager:
         if self.longbridge.is_available():
             df = self.longbridge.get_history(symbol, days)
             if df is not None and not df.empty:
-                self._record_source_attempt("historical_data", "longbridge", "ok", rows=len(df))
-                return df
-            self._record_source_attempt("historical_data", "longbridge", "failed", "empty_or_failed")
+                self._record_source_attempt(
+                    "historical_data", "longbridge", "ok", rows=len(df)
+                )
+                return self._cn_volume_to_shares(df, symbol)
+            self._record_source_attempt(
+                "historical_data", "longbridge", "failed", "empty_or_failed"
+            )
         else:
             self._record_source_attempt("historical_data", "longbridge", "unavailable")
 
@@ -660,9 +732,11 @@ class DataManager:
         df = self._get_yf_history(symbol, period)
         if df is not None and not df.empty:
             self._record_source_attempt("historical_data", "yahoo", "ok", rows=len(df))
-            return df
-        self._record_source_attempt("historical_data", "yahoo", "failed", "empty_or_failed")
-        return df
+            return self._cn_volume_to_shares(df, symbol)
+        self._record_source_attempt(
+            "historical_data", "yahoo", "failed", "empty_or_failed"
+        )
+        return self._cn_volume_to_shares(df, symbol)
 
     def get_fundamentals(self, code: str) -> Dict:
         """获取基本面数据：长桥 static_info 优先算 PE/PB，YF 补充其余字段"""
@@ -696,7 +770,9 @@ class DataManager:
                 if price and bps and float(bps) != 0:
                     result["pb"] = round(price / float(bps), 2)
                 if lb_data.get("total_shares") and price:
-                    result["market_cap"] = round(float(lb_data["total_shares"]) * price, 2)
+                    result["market_cap"] = round(
+                        float(lb_data["total_shares"]) * price, 2
+                    )
                 if lb_data.get("dividend_yield") is not None:
                     result["dividend_yield"] = lb_data["dividend_yield"]
                 if lb_data.get("total_shares"):
@@ -704,7 +780,9 @@ class DataManager:
                 if lb_data.get("circulating_shares"):
                     result["circulating_shares"] = lb_data["circulating_shares"]
             else:
-                self._record_source_attempt("fundamentals", "longbridge", "failed", "empty_or_failed")
+                self._record_source_attempt(
+                    "fundamentals", "longbridge", "failed", "empty_or_failed"
+                )
         else:
             self._record_source_attempt("fundamentals", "longbridge", "unavailable")
 
@@ -755,7 +833,9 @@ class DataManager:
             if info:
                 self._record_source_attempt("fundamentals", "yahoo", "ok", rows=1)
             else:
-                self._record_source_attempt("fundamentals", "yahoo", "failed", "empty_or_failed")
+                self._record_source_attempt(
+                    "fundamentals", "yahoo", "failed", "empty_or_failed"
+                )
         except Exception as e:
             logger.warning(f"YF fundamentals fallback failed for {symbol}: {e}")
             self._record_source_attempt("fundamentals", "yahoo", "failed", str(e))
@@ -804,7 +884,9 @@ class DataManager:
             ticker = self._get_yf_ticker(symbol)
             df = ticker.history(period=period)
             df = df.reset_index()
-            df.columns = [c.lower().replace(" ", "_").replace(".", "_") for c in df.columns]
+            df.columns = [
+                c.lower().replace(" ", "_").replace(".", "_") for c in df.columns
+            ]
             return df
         except Exception as e:
             logger.error(f"YF history failed: {e}")

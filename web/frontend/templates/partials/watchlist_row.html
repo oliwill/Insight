@@ -1,0 +1,24 @@
+<div class="flex items-center justify-between bg-white rounded-lg shadow p-3">
+  <div>
+    <a href="/stocks/{{ symbol }}" class="font-medium hover:text-blue-600">{{ symbol }}</a>
+    {% if latest %}
+    <div class="flex gap-3 mt-1 text-sm text-gray-500">
+      <span>Research: {{ "%.1f"|format(latest.research_score or 0) }}</span>
+      <span>Timing: {{ latest.timing_state or '-' }}</span>
+      <span>{{ latest.created_at }}</span>
+      {% if latest.llm_enhanced %}<span class="text-purple-600 text-xs">AI 解读</span>{% endif %}
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-400 mt-1">尚未分析</p>
+    {% endif %}
+  </div>
+  <div class="flex gap-2">
+    <a href="/stocks/{{ symbol }}" class="text-sm text-blue-600">分析</a>
+    <form method="post" action="/watchlist/remove"
+          hx-post="/watchlist/remove" hx-target="#watchlist-rows" hx-swap="outerHTML"
+          hx-on::after-request="if (document.getElementById('watchlist-rows').children.length === 0) location.reload()">
+      <input type="hidden" name="symbol" value="{{ symbol }}">
+      <button class="text-sm text-gray-400 hover:text-red-600">移除</button>
+    </form>
+  </div>
+</div>

@@ -12,3 +12,9 @@ watchdog
 python-telegram-bot
 lxml
 akshare
+# ── Web 平台 ──
+fastapi
+uvicorn
+httpx
+python-multipart
+jinja2

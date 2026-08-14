@@ -6,6 +6,7 @@ param(
     [string]$InboxInterval = "PT30M",
     [string]$ReviewTime = "09:00",
     [string]$DashboardTime = "08:00",
+    [string]$BriefTime = "09:00",
     [switch]$Force
 )
 
@@ -121,6 +122,11 @@ Register-TraderTask `
     -ShortName "dashboard" `
     -Trigger (New-ScheduledTaskTrigger -Daily -At $DashboardTime) `
     -Description "Update trader-obsidian Obsidian dashboard."
+
+Register-TraderTask `
+    -ShortName "brief" `
+    -Trigger (New-ScheduledTaskTrigger -Daily -At $BriefTime) `
+    -Description "Generate and push the trader-obsidian daily watch brief."
 
 Write-Host ""
 Write-Host "Done. Check with:"

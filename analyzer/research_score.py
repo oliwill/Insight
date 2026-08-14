@@ -4,10 +4,13 @@ Five-dimension research scoring for obsidiantrader.
 The research score measures thesis/company quality. It is intentionally separate
 from trading timing so technical setup does not pollute the main research score.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence
+
+from data.constants import normalize_growth_rate
 
 try:
     from input.evidence import EvidenceItem
@@ -63,20 +66,30 @@ class ResearchScore:
 class ResearchScoreEngine:
     """Builds the existing five-dimension score as structured data."""
 
-    def score(self, market_data: Dict, evidence: Optional[Sequence[EvidenceItem]] = None) -> ResearchScore:
+    def score(
+        self, market_data: Dict, evidence: Optional[Sequence[EvidenceItem]] = None
+    ) -> ResearchScore:
         evidence = list(evidence or [])
         fundamentals = market_data.get("fundamentals", {}) or {}
         stock_info = market_data.get("stock_info", {}) or {}
         peers = market_data.get("peers", []) or []
         web_search = market_data.get("web_search", {}) or {}
-        supply_chain = market_data.get("supply_chain", {}) or fundamentals.get("supply_chain", {}) or {}
+        supply_chain = (
+            market_data.get("supply_chain", {})
+            or fundamentals.get("supply_chain", {})
+            or {}
+        )
 
         dimensions = {
-            "行业/TAM": self._industry_score(stock_info, peers, web_search, supply_chain),
+            "行业/TAM": self._industry_score(
+                stock_info, peers, web_search, supply_chain
+            ),
             "护城河": self._moat_score(fundamentals, peers, supply_chain),
             "增长质量": self._growth_score(fundamentals, supply_chain),
             "估值": self._valuation_score(fundamentals, stock_info, peers),
-            "团队/治理": self._team_score(fundamentals, market_data.get("liquidity", {}) or {}),
+            "团队/治理": self._team_score(
+                fundamentals, market_data.get("liquidity", {}) or {}
+            ),
         }
 
         for item in evidence:
@@ -100,16 +113,31 @@ class ResearchScoreEngine:
             missing_evidence=missing,
         )
 
-    def _industry_score(self, stock_info: Dict, peers: List[Dict], web_search: Dict, supply_chain: Optional[Dict] = None) -> ResearchDimensionScore:
+    def _industry_score(
+        self,
+        stock_info: Dict,
+        peers: List[Dict],
+        web_search: Dict,
+        supply_chain: Optional[Dict] = None,
+    ) -> ResearchDimensionScore:
         score = 5.0
         evidence = []
         sector = (stock_info.get("sector") or "").lower()
         industry = (stock_info.get("industry") or "").lower()
-        growth_sectors = ["technology", "semiconductor", "software", "healthcare", "biotechnology", "ai"]
+        growth_sectors = [
+            "technology",
+            "semiconductor",
+            "software",
+            "healthcare",
+            "biotechnology",
+            "ai",
+        ]
 
         if any(s in sector or s in industry for s in growth_sectors):
             score += 1.2
-            evidence.append(f"成长型赛道: {stock_info.get('sector', '-')}/{stock_info.get('industry', '-')}")
+            evidence.append(
+                f"成长型赛道: {stock_info.get('sector', '-')}/{stock_info.get('industry', '-')}"
+            )
         if peers:
             score += min(1.0, len(peers) * 0.15)
             evidence.append(f"找到 {len(peers)} 个相关同行/交叉资产")
@@ -117,19 +145,25 @@ class ResearchScoreEngine:
             evidence.append("存在社交/预测市场关注度")
 
         if self._has_supply_chain(supply_chain):
+            # 产业链瓶颈的分值只计入「护城河」维度，这里只保留证据，避免同一信号重复计分
             topic = supply_chain.get("topic", "-")
             position = supply_chain.get("position", "")
             target_layer = supply_chain.get("target_layer", {}) or {}
-            bottleneck_score = float(target_layer.get("bottleneck_score", supply_chain.get("bottleneck_score", 0)) or 0)
             evidence.append(f"产业链主题: {topic}; {position}"[:160])
             if target_layer.get("supply_demand") == "tight":
-                score += 0.5
-            if bottleneck_score >= 5:
-                score += 0.5
+                evidence.append("所在层级供需偏紧（计入护城河维度）")
 
-        return ResearchDimensionScore("行业/TAM", DIMENSION_WEIGHTS["行业/TAM"], score, score, data_evidence=evidence)
+        return ResearchDimensionScore(
+            "行业/TAM",
+            DIMENSION_WEIGHTS["行业/TAM"],
+            score,
+            score,
+            data_evidence=evidence,
+        )
 
-    def _moat_score(self, fundamentals: Dict, peers: List[Dict], supply_chain: Optional[Dict] = None) -> ResearchDimensionScore:
+    def _moat_score(
+        self, fundamentals: Dict, peers: List[Dict], supply_chain: Optional[Dict] = None
+    ) -> ResearchDimensionScore:
         moat = fundamentals.get("moat")
         evidence = []
         if moat:
@@ -155,8 +189,17 @@ class ResearchScoreEngine:
             evidence.append("同行对比可用于验证竞争优势")
         if self._has_supply_chain(supply_chain):
             target_layer = supply_chain.get("target_layer", {}) or {}
-            bottleneck_score = float(target_layer.get("bottleneck_score", supply_chain.get("bottleneck_score", 0)) or 0)
-            bottleneck_level = target_layer.get("bottleneck_level") or supply_chain.get("bottleneck_level") or "待确认"
+            bottleneck_score = float(
+                target_layer.get(
+                    "bottleneck_score", supply_chain.get("bottleneck_score", 0)
+                )
+                or 0
+            )
+            bottleneck_level = (
+                target_layer.get("bottleneck_level")
+                or supply_chain.get("bottleneck_level")
+                or "待确认"
+            )
             if bottleneck_score >= 7:
                 score += 1.0
             elif bottleneck_score >= 5:
@@ -165,9 +208,13 @@ class ResearchScoreEngine:
             if target_layer.get("certification_barrier"):
                 score += 0.3
                 evidence.append("客户认证壁垒来自产业链卡位")
-        return ResearchDimensionScore("护城河", DIMENSION_WEIGHTS["护城河"], score, score, data_evidence=evidence)
+        return ResearchDimensionScore(
+            "护城河", DIMENSION_WEIGHTS["护城河"], score, score, data_evidence=evidence
+        )
 
-    def _growth_score(self, fundamentals: Dict, supply_chain: Optional[Dict] = None) -> ResearchDimensionScore:
+    def _growth_score(
+        self, fundamentals: Dict, supply_chain: Optional[Dict] = None
+    ) -> ResearchDimensionScore:
         score = 5.0
         evidence = []
         revenue_growth = self._percent(fundamentals.get("revenue_growth"))
@@ -199,17 +246,28 @@ class ResearchScoreEngine:
                 score -= 0.8
                 evidence.append("自由现金流为负")
         if self._has_supply_chain(supply_chain):
+            # 产业链瓶颈的分值只计入「护城河」维度，这里只保留证据，避免同一信号重复计分
             target_layer = supply_chain.get("target_layer", {}) or {}
             opportunities = supply_chain.get("opportunities", []) or []
             if opportunities:
                 evidence.append(f"产业链机会: {opportunities[0]}")
-            if target_layer.get("supply_demand") == "tight" and target_layer.get("expansion_difficulty") == "high":
-                score += 0.4
-                evidence.append("所在层级供需紧张且扩产困难")
+            if (
+                target_layer.get("supply_demand") == "tight"
+                and target_layer.get("expansion_difficulty") == "high"
+            ):
+                evidence.append("所在层级供需紧张且扩产困难（计入护城河维度）")
 
-        return ResearchDimensionScore("增长质量", DIMENSION_WEIGHTS["增长质量"], score, score, data_evidence=evidence)
+        return ResearchDimensionScore(
+            "增长质量",
+            DIMENSION_WEIGHTS["增长质量"],
+            score,
+            score,
+            data_evidence=evidence,
+        )
 
-    def _valuation_score(self, fundamentals: Dict, stock_info: Dict, peers: List[Dict]) -> ResearchDimensionScore:
+    def _valuation_score(
+        self, fundamentals: Dict, stock_info: Dict, peers: List[Dict]
+    ) -> ResearchDimensionScore:
         score = 5.0
         evidence = []
         ps = fundamentals.get("ps") or fundamentals.get("price_to_sales")
@@ -251,17 +309,25 @@ class ResearchScoreEngine:
         if peers:
             evidence.append("具备同行估值对照")
 
-        return ResearchDimensionScore("估值", DIMENSION_WEIGHTS["估值"], score, score, data_evidence=evidence)
+        return ResearchDimensionScore(
+            "估值", DIMENSION_WEIGHTS["估值"], score, score, data_evidence=evidence
+        )
 
-    def _team_score(self, fundamentals: Dict, liquidity: Dict) -> ResearchDimensionScore:
+    def _team_score(
+        self, fundamentals: Dict, liquidity: Dict
+    ) -> ResearchDimensionScore:
         score = 5.0
         evidence = []
         insider_ownership = liquidity.get("insider_ownership")
         insider_signal = fundamentals.get("insider_signal")
-        sbc_ratio = fundamentals.get("sbc_ratio") or fundamentals.get("stock_based_compensation_ratio")
+        sbc_ratio = fundamentals.get("sbc_ratio") or fundamentals.get(
+            "stock_based_compensation_ratio"
+        )
 
         if insider_ownership is not None:
-            pct = insider_ownership * 100 if insider_ownership <= 1 else insider_ownership
+            pct = (
+                insider_ownership * 100 if insider_ownership <= 1 else insider_ownership
+            )
             evidence.append(f"内部人持股 {pct:.1f}%")
             if pct > 10:
                 score += 1.0
@@ -282,7 +348,13 @@ class ResearchScoreEngine:
             elif pct < 10:
                 score += 0.4
 
-        return ResearchDimensionScore("团队/治理", DIMENSION_WEIGHTS["团队/治理"], score, score, data_evidence=evidence)
+        return ResearchDimensionScore(
+            "团队/治理",
+            DIMENSION_WEIGHTS["团队/治理"],
+            score,
+            score,
+            data_evidence=evidence,
+        )
 
     def _has_supply_chain(self, supply_chain: Optional[Dict]) -> bool:
         """判断产业链数据是否可用于评分；缺失时保持原评分逻辑不变。"""
@@ -290,8 +362,12 @@ class ResearchScoreEngine:
             return False
         return supply_chain.get("status") in {"available", "fallback"}
 
-    def _apply_evidence(self, dimensions: Dict[str, ResearchDimensionScore], item: EvidenceItem) -> None:
-        credibility_delta = {"high": 0.6, "medium": 0.35, "low": 0.15}.get(getattr(item, "credibility", "medium"), 0.25)
+    def _apply_evidence(
+        self, dimensions: Dict[str, ResearchDimensionScore], item: EvidenceItem
+    ) -> None:
+        credibility_delta = {"high": 0.6, "medium": 0.35, "low": 0.15}.get(
+            getattr(item, "credibility", "medium"), 0.25
+        )
         impact = getattr(item, "score_impact", "confidence_only")
         if impact not in {"up", "down"}:
             delta = 0.0
@@ -306,8 +382,14 @@ class ResearchScoreEngine:
             if delta:
                 dim.adjusted_score += delta
                 direction = "上调" if delta > 0 else "下调"
-                reason = f"{direction}{abs(delta):.1f}: {getattr(item, 'claim', '')[:80]}"
-                dim.adjustment_reason = f"{dim.adjustment_reason}; {reason}" if dim.adjustment_reason else reason
+                reason = (
+                    f"{direction}{abs(delta):.1f}: {getattr(item, 'claim', '')[:80]}"
+                )
+                dim.adjustment_reason = (
+                    f"{dim.adjustment_reason}; {reason}"
+                    if dim.adjustment_reason
+                    else reason
+                )
 
     def _missing_evidence(
         self,
@@ -330,7 +412,9 @@ class ResearchScoreEngine:
                 missing.append(f"{name} 证据不足")
         return missing
 
-    def _overall_confidence(self, dimensions: Dict[str, ResearchDimensionScore], missing: List[str]) -> str:
+    def _overall_confidence(
+        self, dimensions: Dict[str, ResearchDimensionScore], missing: List[str]
+    ) -> str:
         low_count = sum(1 for dim in dimensions.values() if dim.confidence == "low")
         if len(missing) >= 4 or low_count >= 2:
             return "low"
@@ -346,7 +430,9 @@ class ResearchScoreEngine:
             return "medium"
         return "low"
 
-    def _weighted_total(self, dimensions: Dict[str, ResearchDimensionScore], adjusted: bool) -> float:
+    def _weighted_total(
+        self, dimensions: Dict[str, ResearchDimensionScore], adjusted: bool
+    ) -> float:
         total = 0.0
         for dim in dimensions.values():
             score = dim.adjusted_score if adjusted else dim.base_score
@@ -354,15 +440,8 @@ class ResearchScoreEngine:
         return total
 
     def _percent(self, value) -> Optional[float]:
-        if value is None:
-            return None
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            return None
-        if abs(value) <= 1:
-            return value * 100
-        return value
+        """统一为百分比。委托 normalize_growth_rate 处理小数/百分比两种输入。"""
+        return normalize_growth_rate(value)
 
     def _clamp(self, value: float) -> float:
         return round(max(0.0, min(10.0, float(value))), 1)
@@ -373,7 +452,11 @@ class ResearchScoreEngine:
             "|---|---:|---:|---:|---:|---|---|",
         ]
         for dim in score.dimensions.values():
-            evidence = dim.adjustment_reason or "; ".join((dim.data_evidence + dim.obsidian_evidence)[:2]) or "证据不足"
+            evidence = (
+                dim.adjustment_reason
+                or "; ".join((dim.data_evidence + dim.obsidian_evidence)[:2])
+                or "证据不足"
+            )
             evidence = evidence.replace("|", "/")[:120]
             lines.append(
                 f"| {dim.name} | {dim.base_score:.1f} | {dim.adjusted_score:.1f} | {dim.weight:.0%} | {dim.weighted_score:.1f} | {evidence} | {dim.confidence} |"

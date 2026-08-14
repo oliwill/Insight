@@ -36,13 +36,16 @@ class FakeDataManager:
 
 
 class FakeMemoryManager:
+    def __init__(self, base_dir=None):
+        self.base_dir = base_dir
+
     def get_stock_context(self, code):
         return ""
 
 
 def test_generate_analysis_adds_supply_chain_without_breaking_existing_keys(monkeypatch):
     monkeypatch.setattr(pipeline, "DataManager", lambda: FakeDataManager())
-    monkeypatch.setattr(pipeline, "MemoryManager", lambda: FakeMemoryManager())
+    monkeypatch.setattr(pipeline, "MemoryManager", lambda base_dir=None: FakeMemoryManager(base_dir))
 
     result = pipeline.generate_analysis("MU.US")
 
@@ -59,7 +62,7 @@ def test_generate_analysis_records_supply_chain_error_and_continues(monkeypatch)
             raise ValueError("boom")
 
     monkeypatch.setattr(pipeline, "DataManager", lambda: FakeDataManager())
-    monkeypatch.setattr(pipeline, "MemoryManager", lambda: FakeMemoryManager())
+    monkeypatch.setattr(pipeline, "MemoryManager", lambda base_dir=None: FakeMemoryManager(base_dir))
     monkeypatch.setattr("data.supply_chain.StockChainAnalyzer", lambda: FailingStockChainAnalyzer())
 
     result = pipeline.generate_analysis("MU.US")

@@ -124,8 +124,19 @@ class MemoryManager:
     - log.md 作为操作日志
     """
 
-    def __init__(self):
-        _ensure_dirs()
+    def __init__(self, base_dir: Optional[Path] = None):
+        """初始化记忆管理器
+
+        Args:
+            base_dir: 用户级 vault 根目录（含 Analysis/Materials 子目录）。
+                默认 None → 使用 Config.WIKI_BASE_DIR（单用户/CLI 兼容）。
+        """
+        self.base_dir = Path(base_dir) if base_dir else Config.WIKI_BASE_DIR
+        self.wiki_dir = self.base_dir / Config.WIKI_SUBDIR
+        self.materials_dir = self.base_dir / Config.MATERIALS_SUBDIR
+        self.index_path = self.wiki_dir / "index.md"
+        self.log_path = self.wiki_dir / "log.md"
+        _ensure_dirs(self.base_dir)
         self._init_index()
         self._init_log()
 
@@ -133,8 +144,8 @@ class MemoryManager:
 
     def _init_index(self):
         """初始化 index.md"""
-        if not INDEX_PATH.exists():
-            _write_file(INDEX_PATH,
+        if not self.index_path.exists():
+            _write_file(self.index_path,
                 "# Stock Wiki Index\n\n"
                 "> 每次分析或摄入资料后自动更新\n\n"
                 "| 代码 | 名称 | 最近分析 | 评分 | 资料数 |\n"
@@ -143,7 +154,7 @@ class MemoryManager:
 
     def get_index(self) -> str:
         """读取 index.md"""
-        return _read_file(INDEX_PATH)
+        return _read_file(self.index_path)
 
     def update_index(self, stock_code: str, stock_name: str, score: float = 0, material_count: int = -1):
         """更新 index.md 中某只股票的条目"""
@@ -171,28 +182,28 @@ class MemoryManager:
                 insert_at = len(lines)
             lines.insert(insert_at, new_row)
 
-        _write_file(INDEX_PATH, "\n".join(lines))
+        _write_file(self.index_path, "\n".join(lines))
 
     # ==================== Log ====================
 
     def _init_log(self):
         """初始化 log.md"""
-        if not LOG_PATH.exists():
-            _write_file(LOG_PATH,
+        if not self.log_path.exists():
+            _write_file(self.log_path,
                 "# Operation Log\n\n> Append-only 操作日志\n\n"
             )
 
     def append_log(self, action: str, detail: str):
         """追加操作日志"""
         entry = f"\n## [{_now()}] {action}\n\n{detail}\n"
-        _append_file(LOG_PATH, entry)
+        _append_file(self.log_path, entry)
 
     def get_recent_log(self, n: int = 10) -> List[Dict]:
         """
         读取最近 n 条日志，返回结构化列表。
         每条: {"timestamp": ..., "action": ..., "detail": ...}
         """
-        content = _read_file(LOG_PATH)
+        content = _read_file(self.log_path)
         if not content:
             return []
 
@@ -218,11 +229,11 @@ class MemoryManager:
 
     def get_stock_wiki(self, stock_code: str) -> str:
         """读取某只股票的 Wiki 页面"""
-        return _read_file(_stock_wiki_path(stock_code))
+        return _read_file(_stock_wiki_path(stock_code, self.base_dir))
 
     def init_stock_wiki(self, stock_code: str, stock_name: str) -> str:
         """初始化某只股票的 Wiki 页面，已存在则直接返回"""
-        path = _stock_wiki_path(stock_code)
+        path = _stock_wiki_path(stock_code, self.base_dir)
         if path.exists():
             return _read_file(path)
 
@@ -427,7 +438,7 @@ class MemoryManager:
             )
             wiki = _replace_section(wiki, "综合评估", "\n".join(new_lines))
 
-        _write_file(_stock_wiki_path(stock_code), wiki)
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), wiki)
         self.append_log("eval_update", f"{stock_code} 评估表更新: {dimension} → {current_judgment}")
 
     # ==================== 时间线 ====================
@@ -465,7 +476,7 @@ class MemoryManager:
             )
 
         wiki = _append_to_section(wiki, "分析时间线", entry)
-        _write_file(_stock_wiki_path(stock_code), wiki)
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), wiki)
 
     # ==================== 预测验证 ====================
 
@@ -481,7 +492,7 @@ class MemoryManager:
             f"{f'  | 目标日期: {target_date}' if target_date else ''}"
         )
         wiki = _append_to_section(wiki, "预测验证", entry)
-        _write_file(_stock_wiki_path(stock_code), wiki)
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), wiki)
         
 
         self.append_log("prediction", f"添加预测: {stock_code} - {prediction[:50]}")
@@ -516,7 +527,7 @@ class MemoryManager:
         mid = _short_id()
         ts = _now()
 
-        mat_dir = _stock_materials_dir(stock_code)
+        mat_dir = _stock_materials_dir(stock_code, self.base_dir)
         filename = f"{_today_compact()}_{source_type}_{mid}.md"
         filepath = mat_dir / filename
 
@@ -550,7 +561,7 @@ tags: {tags}
 
         # 更新 index.md 的资料数
         materials = self.get_materials(stock_code)
-        wiki = _read_file(_stock_wiki_path(stock_code))
+        wiki = _read_file(_stock_wiki_path(stock_code, self.base_dir))
         # 从第一行提取 stock_name
         stock_name = ""
         if wiki:
@@ -568,7 +579,7 @@ tags: {tags}
         self, stock_code: str, ts: str, source_type: str, title: str, filepath: str, summary: str
     ):
         """更新 Wiki 页面的资料索引 section"""
-        wiki = _read_file(_stock_wiki_path(stock_code))
+        wiki = _read_file(_stock_wiki_path(stock_code, self.base_dir))
         if not wiki:
             return
 
@@ -577,7 +588,7 @@ tags: {tags}
             entry += f" — {summary[:80]}"
 
         wiki = _append_to_section(wiki, "资料索引", entry)
-        _write_file(_stock_wiki_path(stock_code), wiki)
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), wiki)
 
     def get_materials(
         self,
@@ -586,7 +597,7 @@ tags: {tags}
         limit: int = 20,
     ) -> List[Dict]:
         """获取某只股票的历史资料"""
-        mat_dir = _stock_materials_dir(stock_code)
+        mat_dir = _stock_materials_dir(stock_code, self.base_dir)
         results = []
 
         files = sorted(mat_dir.glob("*.md"), reverse=True)
@@ -629,7 +640,7 @@ tags: {tags}
         """按关键词搜索所有资料"""
         results = []
         keyword_lower = keyword.lower()
-        for mat_file in MATERIALS_DIR.rglob("*.md"):
+        for mat_file in self.materials_dir.rglob("*.md"):
             if len(results) >= limit:
                 break
             text = _read_file(mat_file)
@@ -651,7 +662,7 @@ tags: {tags}
 
         包含：Wiki 全文 + 最近资料摘要 + 交叉引用的股票摘要
         """
-        wiki = _read_file(_stock_wiki_path(stock_code))
+        wiki = _read_file(_stock_wiki_path(stock_code, self.base_dir))
         if not wiki:
             return ""
 
@@ -670,7 +681,7 @@ tags: {tags}
                 m = re.match(r"^- .*\[([A-Z0-9]+\.[A-Z]{2})\]", line)
                 if m:
                     ref_code = m.group(1)
-                    ref_wiki = _read_file(_stock_wiki_path(ref_code))
+                    ref_wiki = _read_file(_stock_wiki_path(ref_code, self.base_dir))
                     if ref_wiki:
                         # 只取综合评估 section
                         eval_content = _get_section_content(ref_wiki, "综合评估")
@@ -697,25 +708,25 @@ tags: {tags}
             f"{answer}\n"
         )
         wiki = _append_to_section(wiki, "研究笔记", entry)
-        _write_file(_stock_wiki_path(stock_code), wiki)
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), wiki)
 
         self.append_log("query_save", f"研究笔记: {stock_code} - {question[:50]}")
 
     def append_to_section(self, stock_code: str, section_name: str, entry: str):
         """追加内容到 Wiki 的指定章节"""
-        wiki = _read_file(_stock_wiki_path(stock_code))
+        wiki = _read_file(_stock_wiki_path(stock_code, self.base_dir))
         if not wiki:
             return
         wiki = _append_to_section(wiki, section_name, entry)
-        _write_file(_stock_wiki_path(stock_code), wiki)
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), wiki)
 
     def replace_section(self, stock_code: str, section_name: str, content: str):
         """替换 Wiki 的指定章节内容，不保留旧快照"""
-        wiki = _read_file(_stock_wiki_path(stock_code))
+        wiki = _read_file(_stock_wiki_path(stock_code, self.base_dir))
         if not wiki:
             return
         wiki = _replace_section(wiki, section_name, content)
-        _write_file(_stock_wiki_path(stock_code), wiki)
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), wiki)
 
     def update_cockpit_sections(
         self,
@@ -740,7 +751,7 @@ tags: {tags}
     ) -> List[Dict]:
         """从 Wiki 中搜索相关分析"""
         results = []
-        for wiki_file in WIKI_DIR.glob("*.md"):
+        for wiki_file in self.wiki_dir.glob("*.md"):
             if wiki_file.name in ("index.md", "log.md"):
                 continue
             text = _read_file(wiki_file)
@@ -778,7 +789,7 @@ tags: {tags}
         """
         issues = []
 
-        for wiki_file in WIKI_DIR.glob("*.md"):
+        for wiki_file in self.wiki_dir.glob("*.md"):
             if wiki_file.name in ("index.md", "log.md"):
                 continue
 
@@ -826,10 +837,10 @@ tags: {tags}
                         pass
 
         # 检查 index.md 和实际 wiki 文件的一致性
-        index_content = _read_file(INDEX_PATH)
+        index_content = _read_file(self.index_path)
         index_codes = set(re.findall(r"\| ([A-Z0-9]+\.[A-Z]{2}) ", index_content))
         wiki_codes = set()
-        for wf in WIKI_DIR.glob("*.md"):
+        for wf in self.wiki_dir.glob("*.md"):
             if wf.name not in ("index.md", "log.md"):
                 wiki_codes.add(wf.stem.replace("_", ".", 1))
 
@@ -851,7 +862,7 @@ tags: {tags}
         all_scores = []
         stock_stats = {}
 
-        for wiki_file in WIKI_DIR.glob("*.md"):
+        for wiki_file in self.wiki_dir.glob("*.md"):
             if wiki_file.name in ("index.md", "log.md"):
                 continue
 
@@ -928,10 +939,10 @@ tags: {tags}
                 suggestions.append(f"[补充] {code} 只分析过 1 次，建议增加分析频率")
 
         # 检查资料但无分析的股票
-        for mat_dir in MATERIALS_DIR.iterdir():
+        for mat_dir in self.materials_dir.iterdir():
             if mat_dir.is_dir():
                 code = mat_dir.name.replace("_", ".", 1)
-                wiki_path = _stock_wiki_path(code)
+                wiki_path = _stock_wiki_path(code, self.base_dir)
                 if not wiki_path.exists():
                     suggestions.append(f"[缺失] {code} 有资料但未建 Wiki 页面")
 
@@ -943,7 +954,7 @@ tags: {tags}
         self, stock_code: str, prediction_text: str, outcome: str, note: str = ""
     ):
         """验证一条预测的结果"""
-        wiki = _read_file(_stock_wiki_path(stock_code))
+        wiki = _read_file(_stock_wiki_path(stock_code, self.base_dir))
         if not wiki:
             return
 
@@ -957,7 +968,7 @@ tags: {tags}
                         lines.insert(i + 2, f"  - 验证说明: {note}")
                     break
 
-        _write_file(_stock_wiki_path(stock_code), chr(10).join(lines))
+        _write_file(_stock_wiki_path(stock_code, self.base_dir), chr(10).join(lines))
         self.append_log("verify", f"验证预测: {stock_code} - {icon} | {prediction_text[:50]}")
 
     # ==================== 兼容旧接口 ====================
@@ -1078,7 +1089,7 @@ tags: {tags}
 
     def _get_all_analysis_from_log(self, limit: int = 20) -> List[Dict]:
         """从 log.md 解析所有分析记录"""
-        log_content = _read_file(LOG_PATH)
+        log_content = _read_file(self.log_path)
         if not log_content:
             return []
 

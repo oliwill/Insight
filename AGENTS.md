@@ -1,365 +1,146 @@
-# AGENTS.md
+# Repository Guidelines
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Guidance for AI assistants working in this repository. For the full analysis-report
+specification (sections A–J, front matter, five-dimension scoring), see `CLAUDE.md`;
+for component detail see `docs/architecture.md`; for ops commands see `docs/runbook.md`.
 
 ## Project Overview
 
-**trader-obsidian** is a stock analysis system that integrates with Obsidian as the user workbench. Codex is the execution engine.
+**trader-obsidian** (a.k.a. *Insight*) is a Python stock-analysis pipeline that uses
+Obsidian as the durable research workspace and an AI agent (Claude Code / Codex) as the
+reasoning engine. It collects market data, extracts typed evidence from the vault,
+separates company-quality scoring (Research Score) from trade timing (Timing State),
+and writes structured Markdown back into the vault. It never executes trades.
 
-- **Analysis Output**: Written directly to Obsidian `.md` files (no plugins needed)
-- **Input**: User drops materials in the Obsidian `Inbox/` folder (path set via `OBSIDIAN_INBOX_DIR` in `.env`)
-- **Execution**: Codex orchestrates analysis via Python scripts
+## Architecture & Data Flow
 
-## Quick Commands
+```
+Obsidian Inbox ──► inbox_scanner ──► data.analysis_pipeline.generate_analysis(code)
+                                          │
+Wiki / Materials ─► input.evidence ───────┤   (each stage emits `*_error` on failure,
+                                          ▼    never aborts; fallbacks logged in `_data_sources`)
+   data.supply_chain (Serenity) → analyzer.research_score (5-dim, weighted)
+   analyzer.wyckoff + 趋势博弈四模块 ──────► analyzer.timing_engine (Ready/Wait/Watch/Avoid)
+                                          ▼
+                     analyzer.report_generator → analyzer.report_quality
+                                          ▼
+                     memory.manager ──► Analysis/{CODE}.md, Dashboard.md, Tasks/
+                                          ▼
+                     backtest.runner / review ──► ## 预测验证 + output/review_*
+```
 
-All commands run from the project root:
+Key contracts an assistant must not break:
+
+- **Wiki file naming**: symbol `.`/`/` → `_` (`TEM.US` → `TEM_US.md`, `03986.HK` → `03986_HK.md`), written under `Config.get_wiki_dir()`.
+- **Wiki sections**: `证据表` / `五维打分` / `交易时机状态` / `与上次分析相比` are *replaced* each run; `分析时间线` / `预测验证` / `研究笔记` / `资料索引` are *append-only*.
+- **Supply-chain enrichment** is additive and deterministic: no external LLM calls, no new top-level Obsidian sections, must not hide missing fundamentals (`docs/architecture.md`).
+- The `himself65/finance-skills` agent plugin is **not** a Python dependency of `data.analysis_pipeline` or the scoring/reporting path. Social/source readers stay read-only.
+
+## Key Directories
+
+| Path | Purpose |
+|---|---|
+| `analyzer/` | Scoring & reporting: `research_score.py`, `timing_engine.py`, `report_generator.py`, `report_quality.py`, `fundamental.py`, `wyckoff*.py`, `dow_channel.py`, `volume_profile.py`, `force_balance.py`, `multi_timeframe.py` |
+| `data/` | Data layer: `manager.py` (DataManager + symbol normalization), `analysis_pipeline.py`, `supply_chain.py`, `serenity/`, `search.py`, `options.py`, `earnings.py`, `liquidity.py`, `correlation.py`, `etf.py`, `akshare_source.py`, `sentiment_analyzer.py`, `portfolio_loader.py` |
+| `memory/` | Vault persistence: `manager.py` (MemoryManager), `section_parser.py` |
+| `input/` | Intake: `evidence.py` (EvidenceExtractor), `ingest.py` (tags_index.json) |
+| `backtest/` | `runner.py`, `review.py`, `core.py`, `report.py`, `framework_analyzer.py` |
+| `scripts/` | CLI entry points (see Development Commands) + `windows/` PowerShell wrappers |
+| `tests/` | pytest suite, incl. `tests/test_serenity/` subpackage |
+| `web/` | FastAPI-style `routers/` + `frontend/` |
+| `website/` | Standalone static page (unrelated to `web/`) |
+| `skills/` | Public agent skill `stock-research-cockpit/` + internal skills; locked by `skills-lock.json` |
+| `docs/` | `architecture.md`, `runbook.md`, `integration-guide.md`, `handoff.md`, `plans/` |
+| `launchd/` | macOS scheduled-job plists (Windows equivalent: `scripts/windows/*.ps1`) |
+| `output/`, `tmp_analysis/`, `logs/` | Generated artifacts — never edit by hand |
+
+## Development Commands
+
+Run from project root.
 
 ```bash
-# Batch A-C regression checks
-python -m pytest tests/test_core_scoring.py tests/test_section_write.py tests/test_yahoo_symbol.py tests/test_backtest_timeline.py tests/test_data_manager_env.py -v
-python - <<'PY'
-from input.evidence import EvidenceExtractor
-from analyzer.research_score import ResearchScoreEngine
-from analyzer.timing_engine import TimingEngine
-from run_analysis import write_analysis_to_obsidian
-print('core/writeback imports ok')
-PY
+# Install
+pip install -r requirements.txt            # runtime
+pip install -r requirements-dev.txt        # + pytest
 
-# Quick analysis (recommended) - generates formatted report and writes to Obsidian
-python scripts/analyze_stock.py AAPL
+# Core workflow
+python scripts/analyze_stock.py AAPL       # canonical one-click analysis → writes Obsidian wiki
+python run_analysis.py AAPL                # JSON data dump for agent reasoning (no write)
+python run_analysis.py --scan              # process pending Inbox items
+python run_analysis.py --dashboard         # update Dashboard.md
+python one_shot_analysis.py AAPL           # JSON via subprocess-isolated pipeline (timeout-wrapped)
 
-# Full analysis workflow (Codex orchestration)
-python run_analysis.py AAPL        # Outputs JSON for Codex analysis
-python run_analysis.py --scan     # Process all pending Inbox items
-python run_analysis.py --dashboard  # Update Dashboard only
-python run_analysis.py --inbox     # Scan Inbox status
+# Scheduled-task equivalents (also run by scheduler.py / launchd / Task Scheduler)
+python scripts/scan_inbox.py --dry-run --json
+python scripts/run_review.py --list-tickers --json
+python scripts/update_dashboard.py --json
+python scripts/weekly_review.py
+python scripts/portfolio_scan.py           # batch lean scan of holdings
+python scripts/generate_full_report.py     # 11-section A–J full report
+python scripts/serenity_scan.py            # industry-chain scan
+python scripts/podwise_sync.py             # import podcast notes into vault
+
+# Optional interfaces
+python trader_mcp.py                       # MCP server (scan/context/write/search tools)
+python telegram_bot.py --polling           # /note /get /scan /inbox /task
+python inbox_watcher.py                    # watchdog on Inbox/Clippings/Raw
+python scheduler.py                        # croniter-based daemon (SCHEDULE_* env vars)
+
+# Windows smoke tests
+powershell -ExecutionPolicy Bypass -File scripts\windows\run_smoke_tests.ps1
+powershell -ExecutionPolicy Bypass -File scripts\windows\run_write_smoke_examples.ps1 -PythonExe ".\.venv\Scripts\python.exe"
 ```
 
-## Obsidian Vault Structure
+## Code Conventions & Common Patterns
 
-```
-Lzw/
-├── Inbox/              # User drops materials here (Twitter, Substack, WeChat, etc.)
-├── Dashboard.md        # Portfolio overview (auto-updated)
-└── 4_Trader/
-    ├── Analysis/       # Stock wiki pages + weekly review reports (auto-managed)
-    ├── Materials/      # Raw material archives per stock (auto-managed)
-    ├── Charts/         # Auto-generated Wyckoff charts
-    └── Tasks/          # Trading and research tasks (auto-created)
-```
+- **Language**: Python, snake_case throughout; docstrings, report headings, and user-facing strings are commonly Chinese — match the surrounding language.
+- **Config**: single source is `config.py` — a `Config` class reading env vars once via `python-dotenv` at import. Add new settings there with `os.getenv(..., default)`, not scattered `os.environ` reads. Validate with `Config.validate()` / `ensure_config()`.
+- **Error handling**: pipeline stages catch failures locally and attach a `*_error` key to the result dict instead of raising; source fallbacks are recorded under `_data_sources` (`data/analysis_pipeline.py`). Don't let one failed source abort the whole analysis.
+- **Data-source fallback**: Longbridge → Yahoo Finance (`yfinance`) → akshare (CN A-shares). Missing Longbridge credentials must degrade silently to Yahoo.
+- **Timeout isolation**: external data fetches run through the `one_shot_analysis.py` subprocess wrapper governed by `ANALYSIS_TIMEOUT` (default 30s). On `"error": "timeout"`, proceed with partial data and note the limitation.
+- **stdout hygiene**: CLI tools that emit JSON reconfigure UTF-8 (`sys.stdout.reconfigure(encoding='utf-8')`) and redirect `loguru`/logging to stderr so stdout stays parseable.
+- **Symbol normalization**: canonical forms are `AAPL.US`, `00700.HK`, `SH603906` / `SZ000001`; use `DataManager.normalize_symbol()`. Yahoo helpers convert HK to 4-digit form (`00700.HK` → `0700.HK`) only at the data-request boundary.
+- **Synchronous codebase** — no async/await in the pipeline; concurrency is via subprocesses and the filesystem.
+- **State** lives in the Obsidian vault (Markdown + front matter) and JSON side files (`tags_index.json`, `data/cache/supply_chain/*.json`, `tmp_analysis/`). There is no database.
+- **Scheduling**: cron strings from `SCHEDULE_*` env vars via `croniter`; macOS uses `launchd/*.plist`, Windows uses `scripts/windows/register_scheduled_tasks.ps1`.
 
-## Standard Analysis Workflow
+## Important Files
 
-**CRITICAL: 分析报告必须写入 Obsidian Vault，文件名格式必须正确！**
-- **正确路径**：`Config.get_wiki_dir()` → `/Users/al/Library/CloudStorage/Dropbox/应用/remotely-save/Lzw/4_Trader/Analysis/`
-- **文件命名规则**：股票代码中的 `.` 和 `/` 都替换为 `_`
-  - `TEM.US` → `TEM_US.md`
-  - `600487.SH` → `600487_SH.md`
-  - `00100.HK` → `00100_HK.md`
-- **AI 写入方式**：
-  - 方式 1（推荐）：使用 `write_analysis_to_obsidian()` 函数
-  - 方式 2：使用 `Write` 工具，路径必须是 `Config.get_wiki_dir() / {STOCK_CODE_with_underscore}.md`
-- **避免重复文件**：不要既调用 `MemoryManager.init_stock_wiki()` 又用 `Write` 工具写入不同路径
+| File | Role |
+|---|---|
+| `scripts/analyze_stock.py` | Canonical full local workflow (fetch → score → chart → report → write) |
+| `run_analysis.py` | CLI orchestration: JSON fetch, `--scan`, `--dashboard`, `write_analysis_to_obsidian()`, `write_task()` |
+| `data/analysis_pipeline.py` | `generate_analysis(code)` — one-call pipeline returning the full data dict |
+| `memory/manager.py` | MemoryManager: wiki init, section replace/append, timeline, Materials, evaluation table |
+| `config.py` + `.env.example` | All configuration; copy `.env.example` → `.env` and set vault paths |
+| `CLAUDE.md` | Authority for the comprehensive-report format (11 sections, front matter, scoring weights) |
+| `docs/architecture.md` | Component map, pipeline fields, persistence model, interfaces |
+| `docs/runbook.md` | Ops commands, smoke tests, troubleshooting |
+| `trader_mcp.py` | MCP server entry |
+| `skills-lock.json` | Imported finance-skill sources + hashes |
 
-When user asks to analyze a stock (e.g., "分析 AAPL"):
+Required env vars (see `.env.example`): `WIKI_BASE_DIR`, `OBSIDIAN_INBOX_DIR`,
+`OBSIDIAN_TASKS_DIR`, `OBSIDIAN_DASHBOARD_PATH` (+ `ANALYSIS_TIMEOUT`).
+`LONGBRIDGE_*`, `SERPAPI_KEY`, `NEWSAPI_KEY`, `TELEGRAM_*`, `PODWISE_*` are optional
+enhancements with graceful fallbacks. Never commit `.env`.
 
-1. **Run data fetch**:
-   ```bash
-   python run_analysis.py AAPL
-   ```
-   This prints JSON with: `market_data`, `wiki_context`, `inbox_materials`
+## Runtime/Tooling Preferences
 
-2. **Read the output** - Look for:
-   - `stock_info` (price, market cap, sector)
-   - `fundamentals` (PE, PB, margins, growth)
-   - `technicals` (MA, RSI, MACD, Bollinger)
-   - `wyckoff` (phase, support, resistance)
-   - `wiki_summary` (historical context)
+- **Python 3.12+** (3.12 and 3.14 both verified in use); plain `pip` + `requirements.txt` — no Poetry/uv/conda.
+- Virtual environment recommended; on Windows reference it explicitly, e.g. `.venv\Scripts\python.exe`.
+- Key deps: `pandas`, `numpy`, `yfinance`, `akshare`, `longbridge`, `matplotlib`, `loguru`, `python-dotenv`, `requests`, `lxml`; optional: `mcp`, `croniter`, `watchdog`, `python-telegram-bot`.
+- Cross-platform: macOS (`launchd/`) and Windows (`scripts/windows/*.ps1`); keep shell examples for both where relevant.
+- Agent-layer finance skills install via `npx plugins add himself65/finance-skills` — agent tooling only, never a Python import.
 
-3. **Gather supplementary data** using structured skill calls (replaces ad-hoc web search):
+## Testing & QA
 
-   | Skill | 用途 | 何时调用 |
-   |---|---|---|
-   | `funda-data` | 期权 flow/GEX、内部人交易、国会交易、分析师预期、供应链图谱 | 每次必做 |
-   | `stock-correlation` | 同行 P/S 基准（自动输出 3–5 家，替代手动搜索） | 每次必做 |
-   | `finance-sentiment` | Reddit / X / Polymarket 结构化情绪 | 每次必做 |
-   | `earnings-preview` | 财报前共识、beat/miss 历史、各项 beat 临界值 | 财报前 30 天内 |
-   | `earnings-recap` | 实际 vs 预期、股价反应、电话会要点 | 财报后 |
-   | `stock-liquidity` | ADTV、bid-ask 价差、大单冲击估算 | 小市值 / 低流动性标的必做 |
-   | `sepa-strategy` | Stage 判断 + VCP / 趋势模板技术形态 | 每次必做 |
-   | `twitter-reader` | 读取关键 KOL（如 Serenity）最新推文 | 有 KOL 持仓信号时 |
-
-4. **Write comprehensive analysis** — mandatory sections in order:
-
-   **A. 公司与催化剂**
-   - 一句话业务描述 + 近期触发此次分析的事件
-   - 供应链定位：上游供应商（3个）/ 核心客户 / 主要竞争对手（来自 `funda-data` 供应链图谱）
-
-   **B. 技术面**
-   - RSI / KDJ / MACD / 布林带 / 成交量比 — 表格呈现，每项附信号判断
-   - **SEPA Stage 判断（必做）**：检查趋势模板（价格 > MA50 > MA150 > MA200 = Stage 2 买入区）；识别 VCP / 突破形态；结论："当前处于 Stage X，是否有效买入形态"
-
-   **B2. 护城河分析（必做）**
-   - 逐项评级（★1–5）：技术/IP 壁垒、客户锁定程度、规模优势、品牌壁垒
-   - **劣势不回避**：竞争对手最大威胁 + 规模差距量化（来自 `stock-correlation` 竞对对比）
-   - 结论：护城河有效窗口期估计（年数）
-
-   **C. 基本面**
-   - 关键财务数字表格（营收、毛利、净亏损/净利、现金、关键比率）
-   - 增长轨迹（过去4季度 QoQ/YoY，未来1-2年分析师预期）
-   - **增长质量维度（必做）**：
-     - 经常性收入 vs 一次性收入占比
-     - 客户集中度（前3大客户占比）
-     - 地理分布与地缘政治暴露
-     - 有机增长 vs 收购贡献
-     - SBC/Revenue 比率（股权稀释压力）
-
-   **D. 估值锚点（必做）**
-   - 当前 TTM P/S = 市值 ÷ 年化营收
-   - 同行 P/S 对比表（来自 `stock-correlation`，3–5家，含 NVDA/AMD 等参照系）
-   - PSG = P/S ÷ 预期收入增速%（PSG<1合理，1–2偏高，>2极度高估）
-   - **当前价格假设了什么（反向推导，必做）**：在当前市值下，需要几年/多高增速才能达到合理估值？明确说出"定价透支了哪一年的收入"
-   - **非对称赔率原型判断**：标注属于哪种类型 — 高确定性增长型 / 催化剂驱动型 / 困境反转型 / 周期底部型；判断当前赔率是否正向
-   - 结论：安全边际判断（充足 / 偏紧 / 无安全边际）
-
-   **E. 市场结构分析（必做）**
-   - 空头比例（Short Float %）+ Days to Cover
-   - 期权 IV（与历史均值对比）+ **GEX（Gamma Exposure）方向**（来自 `funda-data`）
-   - **期权异常流**（来自 `funda-data`）：vol/OI 异常倍数、方向判断
-   - **结构化情绪数据**（来自 `finance-sentiment`）：Reddit 热度、X 情绪、Polymarket 赔率
-   - 近期涨幅拆解：基本面新信息贡献 vs 技术性因素（情绪/空头回补/期权gamma）
-   - 内部人增减持（过去6个月，买入次数 vs 卖出次数 vs 金额）；与其他持仓的内部人信号横向对比
-
-   **F. 风险量化（必做）**
-   - 列出 3–5 个主要风险，每条格式：
-     `风险名称 → 如果发生：收入影响 ±X%，估值影响 ±Y%，概率判断（高/中/低）`
-
-   **G. 三情景目标价（必做）**
-   - 🟢 Bull Case（概率X%）：核心假设 + 12个月目标价 $Z
-   - 🟡 Base Case（概率X%）：核心假设 + 12个月目标价 $Z
-   - 🔴 Bear Case（概率X%）：核心假设 + 12个月目标价 $Z
-   - **概率加权目标价** = Bull×P + Base×P + Bear×P
-   - 当前价 vs 加权目标价 → 隐含12个月回报%
-
-   **H. 操作格网（必做）**
-   - 表格格式，每行：价位区间 | 动作 | 仓位 | 触发条件
-   - 至少覆盖：当前价（追/不追）、第一回调位、核心建仓位、深度加仓位
-   - 注明最大仓位上限
-
-   **I. 警戒线 / 加仓信号（必做）**
-   - 🔴 警戒线（3–6条）：格式"如果 A → 减仓/清仓，原因"
-   - 🟢 加仓信号（3–6条）：格式"如果 B → 可加仓，原因"
-   - 每条必须是可观测的布尔条件（避免"如果市场好转"这类模糊表达）
-
-   **J. 关键催化剂日历**
-   - 按时间排序，每条：日期 | 事件 | 若超预期→股价反应 | 若不及预期→股价反应
-   - 财报前30天内：追加"**财报情景预判**"子节（来自 `earnings-preview`）：共识 EPS/Revenue、有意义 beat 临界值、财报后 3 情景概率 × 股价预判
-
-**报告开头必须包含 Obsidian Front Matter**：
-
-```yaml
----
-title: "{TICKER} {评分}/100 — {核心观点简述}"
-source: Codex
-author: "Codex"
-published: {YYYY-MM-DD}
-created: {YYYY-MM-DD HH:MM}
-description: "{一句话总结：如 PSG XX，12 个月目标价 $X，建仓价位 $Y}"
-tags:
-  - stock-analysis
-  - {sector}
-  - {sub-sector}
-  - 12m-target-{目标价}
-  - psg-{PSG值}
-stock_code: {TICKER.US}
-score: {评分}
-psg: {PSG值}
-target_price: {加权目标价}
-current_price: {当前价格}
-stage: "{Stage 1 底部整理 / Stage 2 主升浪 / Stage 3 顶部 / Stage 4 下跌}"
-moat_score: {护城河综合评分 /10}
-insider_signal: "{positive / neutral / negative}"
-liquidity: "{liquid / normal / thin}"
-earnings_date: "{YYYY-MM-DD}"
----
-```
-
-字段说明：
-- `title`：格式为 "POET 42/100 — PSG 199，12 个月目标价 $11.30（-25%）"
-- `description`：一句话精华，如 "P/S 2145x，PSG 199，无安全边际；等待 $9–10 回调"
-- `tags`：必须包含 `stock-analysis`，行业标签如 `semiconductors`，子领域如 `photonics`
-- `12m-target-{目标价}`：便于 Obsidian 搜索按目标价过滤
-- `psg-{PSG值}`：便于按估值水平过滤（如 `psg-199` 为极度高估）
-- `target_price` / `current_price`：便于 Obsidian Dataview 插件计算潜在收益
-- `stage`：来自 SEPA 分析，便于按技术形态筛选标的
-- `moat_score`：护城河评分，便于 Dataview 筛选高护城河标的
-- `insider_signal`：内部人信号方向，positive = 净买入，negative = 净卖出
-- `liquidity`：thin 表示小市值/低流动性，需要 `stock-liquidity` 分析
-- `earnings_date`：下次财报日，便于 Dataview 按财报日排序
-
-## 五维评分框架
-
-每次分析使用五维打分，加权合计为总分（100分制）：
-
-| 维度 | 权重 | 评分要点 | 主要数据来源 |
-|---|---|---|---|
-| 行业/TAM | 20% | 赛道方向、市场规模、资金流入热度 | `stock-correlation` + `finance-sentiment` |
-| 护城河 | 20% | 技术/IP、客户锁定、规模、品牌 | `funda-data` 供应链 + `stock-correlation` |
-| 增长质量 | 20% | 增速、经常性收入、客户集中度、毛利趋势 | `yfinance-data` + `funda-data` SEC 细节 |
-| 估值 | 25% | P/S、PSG、同行倍数、安全边际 | `funda-data` 分析师预期 + `stock-correlation` |
-| 团队 | 15% | CEO 质量、内部人信号、Skin in the game | `funda-data` 内部人/国会交易 |
-
-**建仓门槛参考**：≥75 高信心建仓 / 60–75 标准建仓 / 45–60 观察/小仓位 / <45 Pass
-
-5. **Write to Obsidian** using Python helper:
-   ```python
-   from memory.manager import MemoryManager
-   mm = MemoryManager()
-   mm.append_to_timeline("AAPL.US", price=185.5, score=72, core_view="技术面整固", analysis_type="综合分析")
-   mm.update_evaluation_table("AAPL.US", "Apple Inc", "综合", "评分72/100 持有观望")
-   ```
-
-6. **Write task file** if actionable signal:
-   ```bash
-   python -c "from run_analysis import write_task; write_task('Review AAPL entry', 'AAPL.US', 'trade', 'Price broke MA50', 'high', '2026-04-30')"
-   ```
-
-7. **Update dashboard**:
-   ```bash
-   python run_analysis.py --dashboard
-   ```
-
-## Inbox Material Format
-
-Users create `.md` files in `Inbox/` with YAML frontmatter:
-
-```yaml
----
-title: NVDA earnings beat expectations
-source: twitter          # twitter|substack|wechat|zhishixingqiu|pdf|note
-ticker: NVDA             # Optional; scanner also auto-detects
-analyze: true            # Set true to queue for processing
-tags: AI, semiconductors, datacenter
----
-
-Content here...
-```
-
-After processing, `processed: true` and `processed_at: YYYY-MM-DD HH:MM` are added to frontmatter.
-
-## Timeout Protection
-
-All Longbridge API calls run in `one_shot_analysis.py` via subprocess with `ANALYSIS_TIMEOUT` (default 30s).
-
-If you see `"error": "timeout"` in output:
-- Longbridge API hung (network/credential issue)
-- Yahoo Finance fallback may have partial data
-- Proceed with available data, note the limitation
-
-## Symbol Normalization
-
-Always use normalized formats when calling Python helpers:
-
-| Input | Normalized | Market |
-|-------|------------|--------|
-| `AAPL` | `AAPL.US` | US |
-| `00700` | `00700.HK` | HK |
-| `603906` | `SH603906` | CN (Shanghai) |
-| `000001` | `SZ000001` | CN (Shenzhen) |
-
-The `DataManager.normalize_symbol()` function handles canonical internal symbols. Yahoo-backed helpers convert HK symbols to Yahoo's four-digit `.HK` format for data requests (`00700.HK` → `0700.HK`, `03986.HK` → `3986.HK`) while preserving canonical wiki identity.
-
-## Module Reference
-
-| Module | Class/Function | Purpose |
-|--------|----------------|---------|
-| `input.evidence` | `EvidenceExtractor`, `EvidenceItem` | Typed evidence extraction from wiki, Materials and Inbox snippets |
-| `analyzer.research_score` | `ResearchScoreEngine` | Five-dimension Research Score with evidence adjustments |
-| `analyzer.timing_engine` | `TimingEngine` | Ready / Wait / Watch / Avoid timing state machine |
-| `scripts.analyze_stock` | `main()` | One-click analysis entry point |
-| `analyzer.report_generator.ReportGenerator` | `generate()` | Unified report formatting (tables + emojis) |
-| `analyzer.wyckoff_chart.WyckoffChartRenderer` | `render()` | Wyckoff chart visualization (price, MA, zones, phases, events) |
-| `analyzer.trading_grid.TradingGridGenerator` | `generate()` | Trading grid with Fibonacci levels, ATR stops, R/R ratios |
-| `data.sentiment_analyzer.SentimentAnalyzer` | `analyze()` | Sentiment scoring: news, social, fear/greed index |
-| `data.analysis_pipeline` | `generate_analysis()` | Complete data pipeline (all modules) |
-| `data.manager.DataManager` | `normalize_symbol()`, `get_historical_data()`, `get_fundamentals()`, `get_stock_info()` | Market data |
-| `memory.manager.MemoryManager` | `init_stock_wiki()`, `append_to_timeline()`, `update_evaluation_table()`, `get_stock_context()`, `save_material()` | Wiki persistence |
-| `inbox_scanner` | `scan_inbox()`, `get_pending_analysis()`, `get_related_materials()`, `mark_processed()` | Inbox management |
-| `input.ingest` | `ingest()` | Material intake with tag indexing (`tags_index.json`) |
-| `run_analysis` | `write_analysis_to_obsidian()`, `write_task()`, `update_dashboard()` | Main orchestration |
-
-## Analysis Output Sections
-
-Each stock in `Analysis/{CODE}.md` has these sections:
-
-- `## 证据表` - Extracted evidence claims from wiki/materials/Inbox
-- `## 五维打分` - Research Score dimension table and total score
-- `## 交易时机状态` - Ready / Wait / Watch / Avoid timing state
-- `## 与上次分析相比` - Comparison with prior analysis
-- `## 综合评估` - Evaluation table (fundamental/valuation/technical/news/aggregate)
-- `## 分析时间线` - Analysis history (timestamp, price, score, type, core view)
-- `## 预测验证` - Backtest results
-- `## 关键事件` - Important events affecting price
-- `## KOL观点汇总` - Social media sentiment
-- `## 研究笔记` - Detailed analysis (append here)
-- `## 交叉引用` - Related stocks
-- `## 资料索引` - Material index
-
-## Common Tasks
-
-### Create a stock wiki page
-```python
-from memory.manager import MemoryManager
-mm = MemoryManager()
-mm.init_stock_wiki("AAPL.US", "Apple Inc")
-# Creates Analysis/AAPL_US.md with all sections
-```
-
-### Add a material to wiki
-```python
-from memory.manager import MemoryManager
-mm = MemoryManager()
-mm.save_material(
-    stock_code="AAPL.US",
-    source_type="twitter",
-    content="Thread content...",
-    title="AAPL bullish thread",
-    summary="Key points...",
-    tags="AI, iPhone",
-)
-# Writes to Materials/AAPL_US/ and updates index
-```
-
-### Query stock context
-```python
-from memory.manager import MemoryManager
-mm = MemoryManager()
-context = mm.get_stock_context("AAPL.US")
-print(context)  # Full wiki + materials summary
-```
-
-## Error Handling
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `ModuleNotFoundError: longbridge` | SDK not installed | Run `pip3 install longbridge --break-system-packages` |
-| `WIKI_BASE_DIR not set` | .env not found | Ensure `.env` exists in project root with proper paths |
-| Analysis not in Obsidian | Wrong write path used | Use `write_analysis_to_obsidian()` or write to `Config.get_wiki_dir()` |
-| `TimeoutExpired` | Longbridge API hung | Increase `ANALYSIS_TIMEOUT` in .env |
-| Empty wiki context | First-time analysis | Call `init_stock_wiki()` first |
-
-## Environment Configuration
-
-Required in `.env`:
-- `WIKI_BASE_DIR` - Obsidian vault root
-- `WIKI_SUBDIR` - Wiki subdirectory (default: Analysis)
-- `MATERIALS_SUBDIR` - Materials subdirectory (default: Materials)
-- `OBSIDIAN_INBOX_DIR` - Inbox folder path
-- `OBSIDIAN_TASKS_DIR` - Tasks folder path
-- `OBSIDIAN_DASHBOARD_PATH` - Dashboard.md path
-- `ANALYSIS_TIMEOUT` - Subprocess timeout in seconds
-
-Optional (defaults to Yahoo Finance if missing):
-- `LONGBRIDGE_APP_KEY`
-- `LONGBRIDGE_APP_SECRET`
-- `LONGBRIDGE_ACCESS_TOKEN`
+- **Framework**: pytest (sole dev dependency). No coverage gate is enforced; tests are regression guards for pipeline and vault-write contracts.
+- **Full suite**: `python -m pytest tests/ -v`
+- **Core regression subset** (run before touching scoring/writeback):
+  ```bash
+  python -m pytest tests/test_core_scoring.py tests/test_section_write.py tests/test_yahoo_symbol.py tests/test_backtest_timeline.py tests/test_data_manager_env.py -v
+  ```
+- **Runbook guard suites**: supply-chain guards and regression guards are enumerated in `docs/runbook.md` — on Windows prefix with `PYTHONIOENCODING=utf-8`.
+- **Conventions**: stdlib-style `test_*.py` functions; heavy use of `monkeypatch` (env vars, fake modules) and `tmp_path`; unit tests must not hit the network — fake/stub external sources (see `tests/test_data_manager_env.py`, `tests/test_data_source_resilience.py`).
+- **Write-smoke gate**: after changing report/writeback code, run `scripts/windows/run_write_smoke_examples.ps1` (or `scripts/analyze_stock.py HIMS.US` + `03986.HK` manually) and `scripts/verify_write_smoke.py` to validate wiki file shape, section anchors, and heading nesting.
+- **Syntax-only check** when pytest/.env unavailable: `python -m py_compile config.py run_analysis.py scripts/analyze_stock.py trader_mcp.py` (full list in `docs/runbook.md`).

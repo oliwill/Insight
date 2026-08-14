@@ -275,6 +275,56 @@ This writes `raycat_backtest_report.md` into the wiki directory.
 | `SCHEDULE_REVIEW` | no | Python scheduler |
 | `SCHEDULE_DASHBOARD` | no | Python scheduler |
 | `SCHEDULE_NOTIFY` | no | Python scheduler |
+| `WEB_DB_PATH` | no | Web SQLite 路径（默认 `data/web.db`） |
+| `USERS_DATA_DIR` | no | 用户 vault 根目录（默认 `data/users`） |
+| `WEB_PORT` | no | uvicorn 端口（默认 8000） |
+| `SESSION_TTL_DAYS` | no | 登录会话有效期（默认 7） |
+| `ANALYSIS_DAILY_QUOTA` | no | 每用户每日分析配额（默认 10） |
+| `INVITE_CODE` | no | 注册邀请码（留空 = 开放注册） |
+| `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | no | LLM 报告增强（DeepSeek 兼容 API） |
+
+## Web Platform Deployment（线上化）
+
+本地开发：
+
+```bash
+python -m web.server            # http://127.0.0.1:8000
+```
+
+Docker 单机部署（VPS）：
+
+```bash
+# 1. 服务器准备 .env（复制 .env.example，填 WIKI_* 路径与可选 LLM_API_KEY）
+cp .env.example .env
+
+# 2. 构建并启动
+docker compose up -d --build
+curl http://127.0.0.1:8000/health   # {"status":"ok"}
+
+# 3. 数据持久化
+#    ./data 目录（SQLite + 用户 vault）挂在宿主机，重启/重建容器不丢数据
+
+# 4. 更新
+git pull && docker compose up -d --build
+```
+
+网络与数据源注意事项：
+
+- **yfinance 可达性**：分析依赖 yfinance/akshare 拉取行情。部署在海外 VPS 无碍；
+  国内 VPS 需确保服务器能访问 Yahoo Finance（配置代理或换数据源）。
+- **数据源配额**：多用户共享服务器侧 API key。`_workers=2` 信号量 + `ANALYSIS_DAILY_QUOTA`
+  兜底，避免限流打爆。
+- **LLM 成本**：`LLM_API_KEY` 留空时报告为纯确定性文本（评分/时机不受影响）。
+  配置后每次分析消耗少量 token，受日配额约束。
+- **反向代理**（可选）：用 Nginx/Caddy 反代 8000 端口并启用 HTTPS。
+  Caddy 单行即可：`insight.example.com { reverse_proxy 127.0.0.1:8000 }`。
+
+冒烟清单：
+
+```bash
+curl -s http://127.0.0.1:8000/health
+# 注册 → 自选 → 发起分析 → 任务页轮询 → 详情页报告渲染 → 追踪页历史
+```
 
 ## Safe Recovery Notes
 
