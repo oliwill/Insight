@@ -395,6 +395,21 @@ def _spawn(target) -> None:
     threading.Thread(target=target, daemon=True).start()
 
 
+def _to_halfwidth(s: str) -> str:
+    """全角字符→半角（中文输入法常打出全角数字/字母/点：３０１４４８．ｓｚ → 301448.sz）。"""
+    return "".join(chr(ord(c) - 0xFEE0) if 0xFF01 <= ord(c) <= 0xFF5E else c for c in s)
+
+
+def _clean_message_text(text: str) -> str:
+    """清洗消息文本：全角归一化、去首尾空白、去群聊 @提及前缀。"""
+    text = _to_halfwidth(text)
+    text = text.strip()
+    # 飞书群聊 @提及 在 content 里是 @_user_N，在纯文本里可能是 @名字
+    text = re.sub(r"^(@_user_\d+\s*)+", "", text)
+    text = re.sub(r"^@[^\s]+\s+", "", text)  # @机器人名 前缀
+    return text.strip()
+
+
 def dispatch(text: str, open_id: str, message_id: str) -> None:
     """处理一条消息：校验 → 分发 → 回复。"""
     if not _ALLOWED_OPEN_ID:
@@ -407,7 +422,7 @@ def dispatch(text: str, open_id: str, message_id: str) -> None:
         return
     if not is_authorized(open_id):
         return  # 非白名单：忽略（不回消息，防暴露）
-    text = text.strip()
+    text = _clean_message_text(text)
     if not text:
         return
 
@@ -416,9 +431,12 @@ def dispatch(text: str, open_id: str, message_id: str) -> None:
         _lark_im_reply(message_id, HELP_TEXT)
         return
 
-    m = re.match(r"^(分析|analyse)\s+([A-Za-z0-9.\-]+)", text, re.IGNORECASE)
+    # 分析指令：支持「分析 X」「分析X」「/analyze X」「帮我分析 X」
+    m = re.match(
+        r"^(?:/analyze|分析|分析一下|帮我分析)\s*([A-Za-z0-9.\-]+)", text, re.IGNORECASE
+    )
     if m:
-        code = m.group(2)
+        code = m.group(1)
         _lark_im_reply(message_id, f"⏳ 正在分析 {code}，请稍候（约 30-60s）…")
         _spawn(lambda: _lark_im_reply(message_id, cmd_analyze(code)))
         return
@@ -441,7 +459,10 @@ def dispatch(text: str, open_id: str, message_id: str) -> None:
         _spawn(lambda: _lark_im_reply(message_id, cmd_note(m.group(1), m.group(2))))
         return
 
-    _lark_im_reply(message_id, "❓ 无法识别的指令，发送 help 查看可用指令。")
+    _lark_im_reply(
+        message_id,
+        f"❓ 无法识别的指令，发送 help 查看可用指令。\n（收到：{text[:50]}）",
+    )
 
 
 # ---------- 事件循环 ----------
