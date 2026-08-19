@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from data import constants as C
+
 
 @dataclass
 class TimingState:
@@ -70,10 +72,10 @@ class TimingEngine:
         )
 
         if research_score is not None:
-            if research_score >= 75:
+            if research_score >= C.TIMING_RESEARCH_HIGH:
                 score += 4
                 reasons.append("Research Score 高，允许更积极等待低风险买点")
-            elif research_score < 45:
+            elif research_score < C.TIMING_RESEARCH_LOW:
                 score -= 12
                 risk_flags.append("Research Score 低，交易时机再好也只适合短线或放弃")
 
@@ -140,21 +142,21 @@ class TimingEngine:
             score -= 5
 
         if rsi is not None:
-            if 40 <= rsi <= 65:
+            if C.TIMING_RSI_HEALTHY_MIN <= rsi <= C.TIMING_RSI_HEALTHY_MAX:
                 score += 5
                 reasons.append(f"RSI {rsi:.1f} 位于健康区间")
-            elif rsi > 75:
+            elif rsi > C.TIMING_RSI_OVERHEAT:
                 score -= 8
                 reasons.append(f"RSI {rsi:.1f} 过热，追高风险上升")
                 entry_triggers.append("等待 RSI 从过热区回落后再评估")
-            elif rsi < 30:
+            elif rsi < C.TIMING_RSI_OVERSOLD:
                 score -= 2
                 entry_triggers.append("若超卖后重新站回关键均线，可转为试探机会")
 
         if vol_ratio is not None:
-            if 0.7 <= vol_ratio <= 1.5:
+            if C.TIMING_VOL_RATIO_MIN <= vol_ratio <= C.TIMING_VOL_RATIO_MAX:
                 score += 2
-            elif vol_ratio > 2:
+            elif vol_ratio > C.TIMING_VOL_RATIO_CROWDED:
                 score -= 3
                 reasons.append("短期成交量显著放大，需判断是否情绪拥挤")
 
@@ -184,6 +186,7 @@ class TimingEngine:
             or "accumulation" in phase
             or "吸筹" in phase
             or "上升" in phase
+            or "上涨" in phase
         ):
             score += 10
             reasons.append(f"Wyckoff 阶段偏正面: {wyckoff.get('phase')}")
@@ -196,9 +199,9 @@ class TimingEngine:
             score -= 12
             reasons.append(f"Wyckoff 阶段偏负面: {wyckoff.get('phase')}")
 
-        if confidence >= 70:
+        if confidence >= C.TIMING_WYCKOFF_CONF_HIGH:
             score += 3
-        elif confidence and confidence < 45:
+        elif confidence and confidence < C.TIMING_WYCKOFF_CONF_LOW:
             score -= 2
 
         if support:
@@ -293,9 +296,9 @@ class TimingEngine:
         elif neckline == "颈线已跌破":
             score -= 4
             reasons.append("颈线已跌破，技术派资金可能出逃")
-        if position < 0.25:
+        if position < C.TIMING_CHANNEL_POS_LOW:
             score += 2
-        elif position > 0.85:
+        elif position > C.TIMING_CHANNEL_POS_HIGH:
             score -= 2
         return score
 
@@ -315,10 +318,10 @@ class TimingEngine:
         dist = force_balance.get("distribution_evidence", 50)
         trap = force_balance.get("retail_trap_risk", 50)
 
-        if acc and acc >= 65:
+        if acc and acc >= C.TIMING_FORCE_ACCUMULATION_MIN:
             score += 5
             reasons.append(f"主力吸筹证据较强（{acc:.0f}）")
-        if chip and chip >= 65:
+        if chip and chip >= C.TIMING_FORCE_CHIP_LOCK_MIN:
             if volume_regime == "平量推升":
                 # 与成交量语言的「平量推升」同源（量比+涨幅），不重复计分
                 reasons.append(
@@ -327,14 +330,14 @@ class TimingEngine:
             else:
                 score += 4
                 reasons.append(f"筹码锁定可能性高（{chip:.0f}）：基石仓位")
-        if dist and dist >= 70:
+        if dist and dist >= C.TIMING_FORCE_DISTRIBUTION_MIN:
             score -= 6
             reasons.append(f"主力派发证据较强（{dist:.0f}）")
-        if trap and trap >= 70:
+        if trap and trap >= C.TIMING_FORCE_TRAP_HIGH:
             score -= 5
             risk_flags.append(f"散户陷阱风险高（{trap:.0f}）：疑似抢帽子游戏")
             reasons.append("散户陷阱风险高，趋势博弈框架四问法审视")
-        elif trap and trap >= 60:
+        elif trap and trap >= C.TIMING_FORCE_TRAP_MED:
             score -= 2
         return score
 
@@ -389,7 +392,7 @@ class TimingEngine:
 
         if price and target:
             potential = (target / price - 1) * 100
-            if potential > 25:
+            if potential > C.TIMING_TARGET_UPSIDE_MIN_PCT:
                 score += 7
                 reasons.append(f"分析师目标价隐含 {potential:+.1f}% 空间")
             elif potential < 0:
@@ -398,18 +401,22 @@ class TimingEngine:
 
         if price and ma50:
             distance = (price / ma50 - 1) * 100
-            if -3 <= distance <= 8:
+            if C.TIMING_MA50_NEAR_MIN_PCT <= distance <= C.TIMING_MA50_NEAR_MAX_PCT:
                 score += 6
                 reasons.append("价格接近 MA50，买点质量较好")
-            elif distance > 20:
+            elif distance > C.TIMING_MA50_FAR_PCT:
                 score -= 6
                 entry_triggers.append(f"等待回调接近 MA50 {ccy}{ma50:.2f}")
 
         if pct_from_high is not None:
-            if pct_from_high > -8:
+            if pct_from_high > C.TIMING_PCT_FROM_HIGH_NEAR:
                 score -= 2
                 reasons.append("价格接近区间高位，追高需谨慎")
-            elif -30 <= pct_from_high <= -10:
+            elif (
+                C.TIMING_PCT_FROM_HIGH_DIP_MIN
+                <= pct_from_high
+                <= C.TIMING_PCT_FROM_HIGH_DIP_MAX
+            ):
                 score += 3
 
         if support and price:
@@ -431,13 +438,13 @@ class TimingEngine:
         score = 0
         days = earnings.get("days_until_earnings")
         if days is not None:
-            if 0 <= days <= 10:
+            if 0 <= days <= C.TIMING_EARNINGS_NEAR_DAYS:
                 score -= 6
                 risk_flags.append("财报窗口极近，隔夜跳空风险高")
-            elif 10 < days <= 30:
+            elif C.TIMING_EARNINGS_NEAR_DAYS < days <= C.TIMING_EARNINGS_WINDOW_DAYS:
                 score -= 2
                 reasons.append("财报窗口 30 天内，需要情景预判")
-            elif days > 30:
+            elif days > C.TIMING_EARNINGS_WINDOW_DAYS:
                 score += 1
         if earnings.get("next_earnings_date"):
             reasons.append(f"下次财报: {earnings.get('next_earnings_date')}")
@@ -456,25 +463,25 @@ class TimingEngine:
         days_cover = liquidity.get("days_to_cover")
 
         if dollar_vol:
-            if dollar_vol >= 50_000_000:
+            if dollar_vol >= C.TIMING_DOLLAR_VOL_ADEQUATE:
                 score += 5
                 reasons.append("日均成交额充足")
-            elif dollar_vol < 10_000_000:
+            elif dollar_vol < C.TIMING_DOLLAR_VOL_LOW:
                 score -= 8
                 risk_flags.append(
                     f"日均成交额偏低 ({ccy}{dollar_vol / 1e6:.1f}M)，仓位需受限"
                 )
         if short_pct:
             pct = short_pct * 100
-            if pct > 20:
+            if pct > C.TIMING_SHORT_PCT_HIGH:
                 score -= 4
                 risk_flags.append(f"做空比例极高 ({pct:.1f}%)，波动风险大")
-            elif pct > 10:
+            elif pct > C.TIMING_SHORT_PCT_ELEVATED:
                 score -= 2
                 reasons.append(
                     f"做空比例较高 ({pct:.1f}%)，可能带来 squeeze 也带来波动"
                 )
-        if days_cover and days_cover > 5:
+        if days_cover and days_cover > C.TIMING_DAYS_TO_COVER_HIGH:
             score -= 3
             risk_flags.append(f"Days to Cover {days_cover:.1f}，流动性压力较高")
         for flag in liquidity.get("risk_flags", [])[:2]:
@@ -495,7 +502,7 @@ class TimingEngine:
         poly_count = len(web_search.get("polymarket", []) or []) if web_search else 0
         put_call = options.get("put_call_ratio") if options else None
 
-        if reddit_count >= 5:
+        if reddit_count >= C.TIMING_REDDIT_CROWDED:
             score -= 2
             risk_flags.append("Reddit 讨论较多，需警惕情绪拥挤")
         elif reddit_count > 0:
@@ -503,10 +510,10 @@ class TimingEngine:
         if poly_count > 0:
             reasons.append("存在 Polymarket 相关事件，可辅助判断催化剂")
         if put_call:
-            if put_call > 2:
+            if put_call > C.TIMING_PUT_CALL_BEARISH:
                 score -= 3
                 risk_flags.append(f"Put/Call {put_call:.2f} 偏空")
-            elif 0.5 <= put_call <= 1.2:
+            elif C.TIMING_PUT_CALL_BULL_MIN <= put_call <= C.TIMING_PUT_CALL_BULL_MAX:
                 score += 1
 
         return score
@@ -514,22 +521,25 @@ class TimingEngine:
     def _state_from_score(
         self, score: int, risk_flags: List[str], research_score: Optional[float]
     ) -> str:
-        if research_score is not None and research_score < 45:
-            return "Avoid" if score < 70 else "Watch"
-        # 财报窗口极近（≤10 天）是硬性风险：无论分数多高都不给 Ready，隔夜跳空不可控
+        if research_score is not None and research_score < C.TIMING_RESEARCH_LOW:
+            return "Avoid" if score < C.TIMING_STATE_RESEARCH_GATE else "Watch"
+        # 财报窗口极近是硬性风险：无论分数多高都不给 Ready，隔夜跳空不可控
         if any("极近" in flag for flag in risk_flags):
-            if score >= 55:
+            if score >= C.TIMING_STATE_WAIT_MIN:
                 return "Wait"
-            if score >= 40:
+            if score >= C.TIMING_STATE_WATCH_MIN:
                 return "Watch"
             return "Avoid"
-        if any("偏低" in flag for flag in risk_flags) and score < 75:
+        if (
+            any("偏低" in flag for flag in risk_flags)
+            and score < C.TIMING_STATE_LIQUIDITY_WAIT_BELOW
+        ):
             return "Wait"
-        if score >= 75:
+        if score >= C.TIMING_STATE_READY_MIN:
             return "Ready"
-        if score >= 55:
+        if score >= C.TIMING_STATE_WAIT_MIN:
             return "Wait"
-        if score >= 40:
+        if score >= C.TIMING_STATE_WATCH_MIN:
             return "Watch"
         return "Avoid"
 

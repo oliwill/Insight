@@ -136,3 +136,19 @@ def test_lark_docs_create_failure(monkeypatch):
 
     monkeypatch.setattr(fb, "_lark_run", lambda args, timeout=60: "")
     assert fb._lark_docs_create("标题", "# md") is None
+
+
+def test_fmt_pe_negative_shows_loss():
+    from scripts.feishu_bot import _fmt_pe
+
+    assert _fmt_pe(-824.6) == "亏损"
+    assert _fmt_pe(21.7) == "21.7"
+    assert _fmt_pe(None) == "—"
+
+
+def test_pct_delegates_to_shared_normalizer():
+    from scripts.feishu_bot import _pct
+
+    assert _pct(0.27) == "27%"
+    assert _pct(27.0) == "27%"
+    assert _pct(None) == "—"

@@ -7,7 +7,7 @@
 from typing import Optional
 
 
-def normalize_growth_rate(value) -> Optional[float]:
+def normalize_growth_rate(value) -> float | None:
     """将营收/盈利增速统一为百分比（%）返回。
 
     当前基本面数据流中，营收/盈利增速唯一来源是 Yahoo Finance（小数制：
@@ -24,6 +24,27 @@ def normalize_growth_rate(value) -> Optional[float]:
     if abs(v) > 500:
         return None
     return v * 100
+
+
+def normalize_margin_ratio(value) -> float | None:
+    """将比率（毛利率/ROE/净利率等）统一为百分比（%）返回。
+
+    与 normalize_growth_rate（恒 ×100，Yahoo 小数制契约）不同，本函数用于
+    口径来源可能混杂的展示层：|v| ≤ 1.5 视为小数制 ×100，否则按已是百分比原样。
+    """
+    if value is None:
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v * 100 if abs(v) <= 1.5 else v
+
+
+# ========== 增速异常护栏 ==========
+GROWTH_ANOMALY_PCT: float = (
+    150.0  # |增速%| 超此值视为可疑数据，评分降权（大型股 YoY 现实上界）
+)
 
 
 # ========== 移动平均线周期 ==========
@@ -87,3 +108,56 @@ FORCE_LONG_SHADOW_RATIO: float = 1.5  # 长下影线：影线 > N × 实体
 FORCE_UPPER_SHADOW_RATIO: float = 1.5  # 长上影线：影线 > N × 实体
 FORCE_LIMIT_UP_THRESHOLD: float = 9.5  # 涨停近似阈值 (%)
 FORCE_SMALL_CAP_THRESHOLD: float = 5e9  # 小市值阈值（低于此值更易抢帽子）
+
+# ========== TimingEngine 阈值（数值与历史一致，集中管理） ==========
+# RSI
+TIMING_RSI_HEALTHY_MIN: float = 40.0
+TIMING_RSI_HEALTHY_MAX: float = 65.0
+TIMING_RSI_OVERHEAT: float = 75.0
+TIMING_RSI_OVERSOLD: float = 30.0
+# 量比
+TIMING_VOL_RATIO_MIN: float = 0.7
+TIMING_VOL_RATIO_MAX: float = 1.5
+TIMING_VOL_RATIO_CROWDED: float = 2.0
+# Wyckoff 置信度（0-100）
+TIMING_WYCKOFF_CONF_HIGH: float = 70.0
+TIMING_WYCKOFF_CONF_LOW: float = 45.0
+# 道氏通道位置（0-1）
+TIMING_CHANNEL_POS_LOW: float = 0.25
+TIMING_CHANNEL_POS_HIGH: float = 0.85
+# 多空博弈证据强度（0-100）
+TIMING_FORCE_ACCUMULATION_MIN: float = 65.0
+TIMING_FORCE_CHIP_LOCK_MIN: float = 65.0
+TIMING_FORCE_DISTRIBUTION_MIN: float = 70.0
+TIMING_FORCE_TRAP_HIGH: float = 70.0
+TIMING_FORCE_TRAP_MED: float = 60.0
+# 价格质量
+TIMING_TARGET_UPSIDE_MIN_PCT: float = 25.0  # 分析师目标价隐含空间加分阈值 (%)
+TIMING_MA50_NEAR_MIN_PCT: float = -3.0
+TIMING_MA50_NEAR_MAX_PCT: float = 8.0
+TIMING_MA50_FAR_PCT: float = 20.0
+TIMING_PCT_FROM_HIGH_NEAR: float = -8.0  # 接近区间高位阈值
+TIMING_PCT_FROM_HIGH_DIP_MIN: float = -30.0  # 回调甜点区下限
+TIMING_PCT_FROM_HIGH_DIP_MAX: float = -10.0  # 回调甜点区上限
+# 财报窗口（天）
+TIMING_EARNINGS_NEAR_DAYS: int = 10
+TIMING_EARNINGS_WINDOW_DAYS: int = 30
+# 流动性
+TIMING_DOLLAR_VOL_ADEQUATE: float = 50_000_000
+TIMING_DOLLAR_VOL_LOW: float = 10_000_000
+TIMING_SHORT_PCT_HIGH: float = 20.0  # %
+TIMING_SHORT_PCT_ELEVATED: float = 10.0  # %
+TIMING_DAYS_TO_COVER_HIGH: float = 5.0
+# 情绪
+TIMING_REDDIT_CROWDED: int = 5
+TIMING_PUT_CALL_BEARISH: float = 2.0
+TIMING_PUT_CALL_BULL_MIN: float = 0.5
+TIMING_PUT_CALL_BULL_MAX: float = 1.2
+# Research 联动与状态分档
+TIMING_RESEARCH_HIGH: float = 75.0
+TIMING_RESEARCH_LOW: float = 45.0
+TIMING_STATE_READY_MIN: int = 75
+TIMING_STATE_WAIT_MIN: int = 55
+TIMING_STATE_WATCH_MIN: int = 40
+TIMING_STATE_RESEARCH_GATE: int = 70  # Research<45 时，时机分≥此值才能 Watch 否则 Avoid
+TIMING_STATE_LIQUIDITY_WAIT_BELOW: int = 75  # 有流动性「偏低」风险标记且低于此分 → Wait

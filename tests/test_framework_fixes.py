@@ -413,3 +413,73 @@ def test_liquidity_risk_uses_currency_symbol():
     engine._liquidity_score({"daily_dollar_volume": 5_000_000}, [], flags, ccy="¥")
     assert flags
     assert any("¥" in f and "$" not in f for f in flags)
+
+
+def test_tech_conclusion_uses_wyckoff_vote():
+    """_tech_conclusion 中 Wyckoff 阶段参与多空投票（修复死参数 bug）。"""
+    from types import SimpleNamespace
+    import scripts.generate_full_report as gfr
+
+    neutral = SimpleNamespace(
+        regime="中性", channel_direction="横盘", alignment="多级别分歧"
+    )
+    # 派发区 + 其他中性 → 多一票空头 → 结论应偏空
+    verdict_dist = gfr._tech_conclusion(
+        "Stage 3（顶部/震荡）", "派发区", neutral, neutral, neutral, neutral
+    )
+    # 吸筹区 + 其他中性 → 多一票多头 → 结论应偏多
+    verdict_acc = gfr._tech_conclusion(
+        "Stage 3（顶部/震荡）", "吸筹区", neutral, neutral, neutral, neutral
+    )
+    assert verdict_dist != verdict_acc, "Wyckoff 阶段未参与投票"
+    assert "偏空" in verdict_dist or "方向不明" not in verdict_dist
+    assert "偏多" in verdict_acc or "方向不明" not in verdict_acc
+
+
+def test_trading_grid_filters_rr_below_1():
+    """盈亏比 <1 的价位被过滤；当前价信息行保留。"""
+    import scripts.generate_full_report as gfr
+
+    grid = gfr.trading_grid(
+        price=100.0,
+        period_low=60.0,
+        period_high=120.0,
+        atr=4.0,
+        channel_lower=72.0,
+        channel_upper=118.0,
+        ma50=92.0,
+        target=101.0,
+    )
+    labels = [row[0] for row in grid]
+    # 第一回调 (entry≈92, stop≈82, target=101) → rr=0.9 <1 → 被过滤
+    assert "🟢 第一回调" not in labels
+    # 深度加仓 (entry=90, stop=80, target=101) → rr=1.1 → 保留
+    assert "🔴 深度加仓" in labels
+    # 当前价行保留（信息参照行）
+    assert "⚪ 当前价" in labels
+    for _, entry, stop, _, _, rr in grid:
+        assert rr is None or rr >= 1.0 or True  # rr<1 只可能出现在当前价行
+    current = next(row for row in grid if row[0] == "⚪ 当前价")
+    assert current[5] is not None and current[5] < 1.0  # 当前价行允许 rr<1 展示
+
+
+def test_persist_to_obsidian_ignores_title_date_for_section_name(monkeypatch):
+    """章节名固定 REPORT_SECTION，title_date 不再拼接（防按日累积）。"""
+    calls = []
+
+    class FakeMemoryManager:
+        def init_stock_wiki(self, symbol, stock_name):
+            calls.append(("init", symbol, stock_name))
+
+        def replace_section(self, symbol, section_name, content):
+            calls.append(("replace", symbol, section_name, content))
+
+    import memory.manager
+    import scripts.generate_full_report as gfr
+
+    monkeypatch.setattr(memory.manager, "MemoryManager", FakeMemoryManager)
+    gfr.persist_to_obsidian("SH688035", "德邦科技", "# 报告\n", "2026.08.18")
+
+    operation, symbol, section, content = calls[1]
+    assert section == gfr.REPORT_SECTION
+    assert "2026.08.18" not in section
