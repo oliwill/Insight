@@ -94,3 +94,31 @@ def test_quality_evaluator_requires_data_gap_disclosure_for_failed_modules():
 
     assert quality.passed is False
     assert any(issue.code == "data_gaps_not_disclosed" for issue in quality.issues)
+
+
+FULL_REPORT_SAMPLE = """# SH688035 德邦科技 — 完整版分析报告2026.08.18
+
+## 一、公司与催化剂
+## 二、基本面与增长质量
+## 五、技术面
+## 九、操作格网
+## 十一、催化剂日历
+## 综合评估
+> **免责声明**：仅供研究参考。
+"""
+
+
+def test_full_report_markers_pass_on_11_section_format():
+    from analyzer.report_quality import ReportQualityEvaluator
+
+    result = ReportQualityEvaluator().evaluate(FULL_REPORT_SAMPLE, {})
+    assert result.passed, [i.message for i in result.issues]
+
+
+def test_full_report_missing_catalyst_section_flagged():
+    from analyzer.report_quality import ReportQualityEvaluator
+
+    broken = FULL_REPORT_SAMPLE.replace("## 十一、催化剂日历", "## 十一、占位")
+    result = ReportQualityEvaluator().evaluate(broken, {})
+    assert not result.passed
+    assert any(i.code == "catalyst_section" for i in result.issues)

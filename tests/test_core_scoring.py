@@ -71,7 +71,6 @@ def test_batch_a_exports_import():
     assert TimingEngine.__name__ == "TimingEngine"
 
 
-
 def test_package_roots_do_not_eagerly_import_unrelated_modules():
     """验证包入口不会为核心评分能力提前加载无关重依赖。"""
     import importlib
@@ -95,7 +94,6 @@ def test_package_roots_do_not_eagerly_import_unrelated_modules():
     assert "analyzer.fundamental" not in sys.modules
     assert "analyzer.comprehensive" not in sys.modules
     assert "analyzer.wyckoff" not in sys.modules
-
 
 
 def test_evidence_item_to_dict_returns_expected_keys():
@@ -132,7 +130,6 @@ def test_evidence_item_to_dict_returns_expected_keys():
     assert data["score_impact"] == "up"
 
 
-
 def test_research_score_applies_evidence_adjustment_to_named_dimension():
     """验证 ResearchScoreEngine 会把结构化证据作用到指定维度，而不是只返回静态基础分。"""
     engine = ResearchScoreEngine()
@@ -160,10 +157,12 @@ def test_research_score_applies_evidence_adjustment_to_named_dimension():
     assert positive_dimension.base_score == negative_dimension.base_score
     assert positive_dimension.adjusted_score > positive_dimension.base_score
     assert negative_dimension.adjusted_score < negative_dimension.base_score
-    assert "Valuation reset improves margin of safety." in positive_dimension.obsidian_evidence
+    assert (
+        "Valuation reset improves margin of safety."
+        in positive_dimension.obsidian_evidence
+    )
     assert "上调" in positive_dimension.adjustment_reason
     assert "下调" in negative_dimension.adjustment_reason
-
 
 
 def test_timing_engine_analyze_returns_supported_state():
@@ -178,3 +177,32 @@ def test_timing_engine_analyze_returns_supported_state():
     assert isinstance(result.reasons, list)
     assert isinstance(result.entry_triggers, list)
     assert isinstance(result.invalidation_triggers, list)
+
+
+def test_growth_anomaly_guard_suppresses_bonus():
+    """异常增速（如 Yahoo 偶发的 345.7%）不发增长/PSG 加分，证据注明降权。"""
+    from analyzer.research_score import ResearchScoreEngine
+
+    md = {
+        "stock_info": {"price": 971.66},
+        "fundamentals": {"revenue_growth": 3.457, "ps": 10.0},
+    }
+    score = ResearchScoreEngine().score(md, [])
+    growth = score.dimensions["增长质量"]
+    valuation = score.dimensions["估值"]
+    assert abs(growth.base_score - 5.0) < 0.01, "异常增速不应发增长加分"
+    assert abs(valuation.base_score - 5.0) < 0.01, "异常增速不应发 PSG 加分"
+    assert any("降权" in e for e in growth.data_evidence + valuation.data_evidence)
+
+
+def test_normal_growth_still_scores():
+    """正常增速（28.5%）增长加分与 PSG 加分不受影响。"""
+    from analyzer.research_score import ResearchScoreEngine
+
+    md = {
+        "stock_info": {"price": 100.0},
+        "fundamentals": {"revenue_growth": 0.285, "ps": 10.0},
+    }
+    score = ResearchScoreEngine().score(md, [])
+    assert score.dimensions["增长质量"].base_score > 5.0
+    assert score.dimensions["估值"].base_score > 6.5  # psg=0.35 → +2.5

@@ -73,6 +73,21 @@ class ReportQualityEvaluator:
         ),
         ("disclaimer", r"免责声明", "缺少免责声明"),
     )
+    # 完整版报告（scripts/generate_full_report.py，11 节 A-J 格式）的结构标记
+    FULL_REPORT_MARKERS = (
+        ("title", r"^# .+", "报告缺少标题"),
+        ("company_section", r"## 一、公司与催化剂", "缺少公司与催化剂 section"),
+        (
+            "fundamental_section",
+            r"## 二、基本面与增长质量",
+            "缺少基本面与增长质量 section",
+        ),
+        ("tech_section", r"## 五、技术面", "缺少技术面 section"),
+        ("grid_section", r"## 九、操作格网", "缺少操作格网 section"),
+        ("catalyst_section", r"## 十一、催化剂日历", "缺少催化剂日历 section"),
+        ("verdict_section", r"## 综合评估", "缺少综合评估 section"),
+        ("disclaimer", r"免责声明", "缺少免责声明"),
+    )
     TIMING_STATES = ("Ready", "Wait", "Watch", "Avoid")
     DATA_GAP_CHECKS = (
         ("行情/技术指标", "technicals", "technicals_error"),
@@ -91,7 +106,13 @@ class ReportQualityEvaluator:
         issues: List[ReportQualityIssue] = []
         text = markdown or ""
 
-        for code, pattern, message in self.REQUIRED_MARKERS:
+        # 按报告格式选择结构标记集（完整版 11 节 vs 标准版）
+        markers = (
+            self.FULL_REPORT_MARKERS
+            if "## 九、操作格网" in text
+            else self.REQUIRED_MARKERS
+        )
+        for code, pattern, message in markers:
             if not re.search(pattern, text, flags=re.MULTILINE):
                 issues.append(ReportQualityIssue(code, "error", message))
 

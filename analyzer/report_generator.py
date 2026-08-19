@@ -11,6 +11,7 @@ from typing import Dict, Any, Sequence
 from datetime import datetime
 
 from config import Config
+from data.constants import normalize_margin_ratio
 
 
 class ReportGenerator:
@@ -927,37 +928,6 @@ class ReportGenerator:
         )
         return "\n".join(lines)
 
-    @classmethod
-    def _section_2_technical(cls, technicals: Dict, wyckoff: Dict) -> str:
-        """第二部分：技术分析（已合并到第一部分）"""
-        return ""
-
-    @classmethod
-    def _section_3_fundamental(cls, fundamentals: Dict) -> str:
-        """第三部分：基本面分析（已合并到第一部分）"""
-        return ""
-
-    @classmethod
-    def _section_4_market_structure(
-        cls, liquidity: Dict, options: Dict, web_search: Dict = None
-    ) -> str:
-        """第四部分：市场结构（已合并到第一部分）"""
-        return ""
-
-    @classmethod
-    def _section_5_catalysts(
-        cls, fundamentals: Dict, earnings: Dict, web_search: Dict
-    ) -> str:
-        """第五部分：催化因素（已合并到第一部分）"""
-        return ""
-
-    @classmethod
-    def _section_6_trading_plan(
-        cls, stock_info: Dict, technicals: Dict, fundamentals: Dict, wyckoff: Dict
-    ) -> str:
-        """第六部分：操作建议（已合并到第一部分）"""
-        return ""
-
     # ========== 辅助方法：信号判定 ==========
 
     @classmethod
@@ -1031,12 +1001,13 @@ class ReportGenerator:
     def _get_valuation_signal(cls, potential) -> str:
         if potential is None:
             return f"{cls.EMOJI['neutral']} 无目标价数据"
+        # 仅为「现价 vs 分析师共识目标价」的相对位置，不是内在价值判断，不过度声称
         return (
-            f"{cls.EMOJI['positive']} 低估"
+            f"{cls.EMOJI['positive']} 低于分析师共识"
             if potential > 50
-            else f"{cls.EMOJI['neutral']} 合理"
+            else f"{cls.EMOJI['neutral']} 接近分析师共识"
             if potential > 0
-            else f"{cls.EMOJI['negative']} 高估"
+            else f"{cls.EMOJI['negative']} 高于分析师共识"
         )
 
     @classmethod
@@ -1249,10 +1220,8 @@ class ReportGenerator:
 
     @classmethod
     def _percent_value(cls, value):
-        if value is None:
-            return None
-        value = float(value)
-        return value * 100 if abs(value) <= 1 else value
+        # 委托共享归一化：小数制 ×100，已是百分比原样（口径与 feishu_bot/full_report 一致）
+        return normalize_margin_ratio(value)
 
     @classmethod
     def _format_large_money(cls, value) -> str:

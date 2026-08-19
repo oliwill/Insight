@@ -161,14 +161,24 @@ def _ccy(code: str) -> str:
 
 
 def _pct(v):
-    """小数→百分比显示；已是百分比原样。"""
+    """小数→百分比显示；已是百分比原样（委托共享归一化）。"""
+    from data.constants import normalize_margin_ratio
+
+    r = normalize_margin_ratio(v)
+    if r is None:
+        return "—"
+    return f"{r:g}%"
+
+
+def _fmt_pe(v):
+    """PE 展示：负值（亏损股）不原样显示数字。"""
     if v is None:
         return "—"
     try:
         f = float(v)
     except (TypeError, ValueError):
         return str(v)
-    return f"{f * 100:g}%" if abs(f) <= 1 else f"{f:g}%"
+    return "亏损" if f < 0 else f"{f:g}"
 
 
 def _build_report_markdown(md: dict, research, timing, code: str) -> str:
@@ -212,8 +222,8 @@ def _build_report_markdown(md: dict, research, timing, code: str) -> str:
 
     mcap = fund.get("market_cap")
     rows = [
-        ("PE(TTM)", _num(fund.get("pe_ttm"))),
-        ("PE(Forward)", _num(fund.get("pe_forward"))),
+        ("PE(TTM)", _fmt_pe(fund.get("pe_ttm"))),
+        ("PE(Forward)", _fmt_pe(fund.get("pe_forward"))),
         ("PB", _num(fund.get("pb"))),
         ("毛利率", _pct(fund.get("gross_margin"))),
         ("ROE", _pct(fund.get("roe"))),
@@ -289,11 +299,18 @@ def cmd_analyze(code: str) -> str:
     if target and price:
         pot = (target / price - 1) * 100
         lines.append(f"   🎯 目标价：{cur}{target:g}（潜在 {pot:+.1f}%）")
-    pe = fund.get("pe_ttm") or fund.get("pe_forward")
+    pe_ttm = fund.get("pe_ttm")
+    pe_fwd = fund.get("pe_forward")
+    pe = pe_ttm or pe_fwd
     rev_g = fund.get("revenue_growth")
     if pe:
         try:
-            lines.append(f"   PE：{float(pe):.1f}")
+            pe_v = float(pe)
+            if pe_v < 0:
+                lines.append("   PE：亏损（N/A）")
+            else:
+                pe_label = "PE(TTM)" if pe_ttm else "PE(Forward)"
+                lines.append(f"   {pe_label}：{pe_v:.1f}")
         except (TypeError, ValueError):
             pass
     if rev_g is not None:

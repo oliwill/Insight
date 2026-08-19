@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence
 
-from data.constants import normalize_growth_rate
+from data.constants import GROWTH_ANOMALY_PCT, normalize_growth_rate
 
 try:
     from input.evidence import EvidenceItem
@@ -223,15 +223,22 @@ class ResearchScoreEngine:
         free_cashflow = fundamentals.get("free_cashflow") or 0
 
         if revenue_growth is not None:
-            evidence.append(f"营收增长 {revenue_growth:+.1f}%")
-            if revenue_growth > 30:
-                score += 2.2
-            elif revenue_growth > 15:
-                score += 1.4
-            elif revenue_growth > 5:
-                score += 0.6
-            elif revenue_growth < 0:
-                score -= 1.5
+            if abs(revenue_growth) > GROWTH_ANOMALY_PCT:
+                # 异常增速（如 Yahoo 偶发的 3457%）不发加分，降权并提示人工核实
+                evidence.append(
+                    f"营收增长 {revenue_growth:+.1f}% 异常（>{GROWTH_ANOMALY_PCT:.0f}%），已降权，待人工核实"
+                )
+                revenue_growth = None
+            else:
+                evidence.append(f"营收增长 {revenue_growth:+.1f}%")
+                if revenue_growth > 30:
+                    score += 2.2
+                elif revenue_growth > 15:
+                    score += 1.4
+                elif revenue_growth > 5:
+                    score += 0.6
+                elif revenue_growth < 0:
+                    score -= 1.5
         if earnings_growth is not None and earnings_growth > 15:
             score += 0.8
             evidence.append(f"盈利增长 {earnings_growth:+.1f}%")
@@ -278,7 +285,11 @@ class ResearchScoreEngine:
 
         if ps:
             evidence.append(f"P/S {ps:.2f}")
-            if revenue_growth and revenue_growth > 0:
+            if (
+                revenue_growth
+                and abs(revenue_growth) <= GROWTH_ANOMALY_PCT
+                and revenue_growth > 0
+            ):
                 psg = ps / revenue_growth
                 evidence.append(f"PSG {psg:.2f}")
                 if psg < 0.5:
@@ -289,6 +300,11 @@ class ResearchScoreEngine:
                     score += 0.2
                 else:
                     score -= 2.0
+            elif revenue_growth and revenue_growth > 0:
+                # 增速异常：不给 PSG 加分，也不倒扣，只标注待核实
+                evidence.append(
+                    f"营收增速 {revenue_growth:+.1f}% 异常（>{GROWTH_ANOMALY_PCT:.0f}%），PSG 加分已降权"
+                )
             elif ps < 3:
                 score += 0.8
             elif ps > 10:

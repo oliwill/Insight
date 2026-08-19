@@ -427,11 +427,16 @@ def trading_grid(
     current_atr_stop = _entry_stop(price, atr)
     rows = []
 
-    def append_row(label, entry, trigger, position):
+    def append_row(label, entry, trigger, position, keep=False):
         if entry <= 0:
             return
         stop = _entry_stop(entry, atr)
-        rows.append((label, entry, stop, trigger, position, _rr(entry, target, stop)))
+        rr = _rr(entry, target, stop)
+        # 盈亏比 <1 的价位（风险大于回报）不展示，避免输出误导性加仓点；
+        # 当前价信息行除外（仅作参照，不是建议买入点）
+        if rr is not None and rr < 1.0 and not keep:
+            return
+        rows.append((label, entry, stop, trigger, position, rr))
 
     # Do not suggest averaging down below the current ATR risk line.  A break below
     # that level invalidates the setup rather than creating another buy level.
@@ -463,7 +468,7 @@ def trading_grid(
         if action == "可追"
         else f"时机状态 {timing_state or '未确认'}，不在当前价追高"
     )
-    append_row("⚪ 当前价", price, current_trigger, "0-15%")
+    append_row("⚪ 当前价", price, current_trigger, "0-15%", keep=True)
 
     brk = min(fib[0.382], channel_upper or fib[0.382])
     if brk > price:
@@ -537,6 +542,12 @@ def _tech_conclusion(sepa_stage, wk_phase, p, c, f, m):
     if "Stage 2" in sepa_stage:
         bull += 1
     elif "Stage 4" in sepa_stage:
+        bear += 1
+    # Wyckoff 阶段参与投票（此前参数传入但从未使用）
+    wk_low = (wk_phase or "").lower()
+    if any(k in wk_low for k in ("markup", "accumulation", "吸筹", "上升", "上涨")):
+        bull += 1
+    elif any(k in wk_low for k in ("markdown", "distribution", "派发", "下跌")):
         bear += 1
     if p.regime in ("平量推升", "量价齐升"):
         bull += 1
@@ -622,15 +633,16 @@ def to_wiki_section_content(report: str) -> str:
 def persist_to_obsidian(
     symbol: str, stock_name: str, report: str, title_date: str = ""
 ) -> None:
-    """幂等写入完整分析，不覆盖已有股票页的其他研究和历史章节。"""
+    """幂等写入完整分析，不覆盖已有股票页的其他研究和历史章节。
+
+    章节名固定为 REPORT_SECTION（每次替换）；title_date 仅保留在报告正文标题内，
+    不拼入章节名，避免每天生成新章节导致 wiki 无限累积。
+    """
     from memory.manager import MemoryManager
 
-    section_name = (
-        f"{stock_name} 完整版分析报告{title_date}" if title_date else REPORT_SECTION
-    )
     manager = MemoryManager()
     manager.init_stock_wiki(symbol, stock_name)
-    manager.replace_section(symbol, section_name, to_wiki_section_content(report))
+    manager.replace_section(symbol, REPORT_SECTION, to_wiki_section_content(report))
 
 
 # ============================================================
@@ -685,6 +697,7 @@ def generate(
     ma20 = float(close.tail(20).mean())
     ma50 = float(close.tail(50).mean())
     ma120 = float(close.tail(120).mean()) if len(close) >= 120 else ma50
+    ma150 = float(close.tail(150).mean()) if len(close) >= 150 else ma120
     ma200 = float(close.tail(200).mean()) if len(close) >= 200 else ma120
     vol_5d = float(vol.tail(5).mean())
     vol_20d = float(vol.tail(20).mean())
@@ -696,10 +709,19 @@ def generate(
         float(close.tail(252).max()) if len(close) >= 252 else float(close.max())
     )
 
-    # SEPA Stage
-    if price > ma50 > ma120 > ma200 and ma200 > float(
-        close.tail(200).head(1).iloc[0] if len(close) >= 200 else ma200
-    ):
+    # SEPA Stage（Minervini 趋势模板：8 条准则中 7 条可算；第 8 条相对强度 RS 无基准数据源，未评估）
+    ma200_prev = float(close.iloc[:-20].tail(200).mean()) if len(close) >= 220 else None
+    sepa_checks = [
+        ("价格高于 MA150 与 MA200", price > ma150 and price > ma200),
+        ("MA150 高于 MA200", ma150 > ma200),
+        ("MA200 较 20 个交易日前上升", (ma200 > ma200_prev) if ma200_prev else None),
+        ("MA50 高于 MA150 与 MA200", ma50 > ma150 and ma50 > ma200),
+        ("价格高于 MA50", price > ma50),
+        ("价格高于 52 周低点 30% 以上", price >= period_low * 1.30),
+        ("价格在 52 周高点 25% 以内", price >= period_high * 0.75),
+    ]
+    sepa_met = sum(1 for _, ok in sepa_checks if ok is True)
+    if sepa_met >= 7:
         sepa_stage = "Stage 2（主升浪，买入区）"
     elif price < ma50 and ma50 < ma200:
         sepa_stage = "Stage 4（下跌，规避）"
@@ -741,12 +763,6 @@ def generate(
     tech_bullish = (price > ma20) and (m.daily_trend == "上升")
     md = {
         "stock_info": {"price": price, "name": name},
-        "fundamentals": {
-            "market_cap": mcap,
-            "pe_ttm": pe,
-            "pe_forward": pf,
-            "target_mean_price": target_mean,
-        },
         "technicals": {
             "trend_short": "BULLISH" if price > ma20 else "BEARISH",
             "rsi_14": rsi,
@@ -780,7 +796,44 @@ def generate(
             "monthly_trend": m.monthly_trend,
         },
     }
-    ts = _te.analyze(md, research_score=60)
+    # Wyckoff 结构传入 Timing（此前漏传导致「缺少 Wyckoff 结构」与技术章节自相矛盾）
+    if wk is not None:
+        md["wyckoff"] = {
+            "phase": wk_phase,
+            "support": wk_support,
+            "resistance": wk_resist,
+            "confidence": wk_conf,
+        }
+    # 真实 Research Score（两层联动：Research<45 时不可 Ready）；失败回退 None 而非假分
+    research_value = None
+    try:
+        from analyzer.research_score import ResearchScoreEngine
+
+        md_research = {
+            "stock_info": {
+                "price": price,
+                "name": name,
+                "sector": sector,
+                "industry": industry,
+            },
+            "fundamentals": {
+                "market_cap": mcap,
+                "pe_ttm": pe,
+                "pe_forward": pf,
+                "pb": pb,
+                "ps": ps,
+                "gross_margin": fund.get("gross_margin"),
+                "roe": fund.get("roe"),
+                "revenue_growth": fund.get("revenue_growth"),
+                "target_mean_price": target_mean,
+            },
+        }
+        research_value = (
+            ResearchScoreEngine().score(md_research, []).total_adjusted_score
+        )
+    except Exception:
+        research_value = None
+    ts = _te.analyze(md, research_score=research_value)
     score = ts.internal_score
 
     # 估值推导
@@ -863,9 +916,12 @@ def generate(
     today, now_str = now.strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d %H:%M")
     title_date = now.strftime("%Y.%m.%d")  # 用于标题，如 2026.07.24
 
-    verdict = (
-        "可关注/小仓位试探" if score >= 55 else ("观望" if score >= 40 else "回避")
-    )
+    verdict = {
+        "Ready": "可建仓（按仓位上限执行）",
+        "Wait": "等待触发条件",
+        "Watch": "观察/小仓试探",
+        "Avoid": "回避",
+    }.get(ts.state, "观望")
     fundamental_rows = _fundamental_rows(
         pe, pf, pb, gm, om, roe, rev_g, eg, cash, debt, de_ratio
     )
@@ -979,6 +1035,33 @@ margin: "{margin}"
 
     # 技术面综合结论（一句话定性 + 多框架汇总表）
     tech_verdict = _tech_conclusion(sepa_stage, wk_phase, p, c, f, m)
+    # 布林带位置按价格在带内分档（此前贴近下轨也可能显示「中轨」）
+    if price > boll_u:
+        boll_pos = "上轨外（出轨/超买）"
+    elif price >= boll_m:
+        boll_pos = "上半区"
+    elif price >= boll_l:
+        boll_pos = "下半区"
+    else:
+        boll_pos = "下轨外（超卖）"
+    sepa_lines = "\n".join(
+        f"  - {'✅' if ok is True else ('➖' if ok is None else '❌')} {label}"
+        for label, ok in sepa_checks
+    )
+
+    # 财报日历：真实日期优先，缺失回退占位（政策/宏观行为通用情景）
+    earnings_date = None
+    try:
+        from data.earnings import EarningsCalendar
+
+        earnings_date = (EarningsCalendar().get_earnings_info(yf_code) or {}).get(
+            "next_earnings_date"
+        )
+    except Exception:
+        earnings_date = None
+    earnings_row_label = earnings_date or "季报期（日期未获取）"
+    rev_g_text = f"{rev_g:.0f}%" if rev_g is not None else "N/A"
+
     L.append(f"""
 ### 📊 技术面综合结论
 
@@ -999,13 +1082,14 @@ margin: "{margin}"
 | RSI(14) | {rsi:.0f} | {"超卖" if rsi < 30 else ("超买" if rsi > 70 else "中性")} |
 | MACD | {macd_h:+.3f} | {"金叉" if macd_h > 0 else "死叉"} |
 | KDJ | K{kdj_k:.0f}/D{kdj_d:.0f}/J{kdj_j:.0f} | {"看多" if kdj_k > kdj_d else "看空"} |
-| 布林带 | 上{boll_u:.1f}/中{boll_m:.1f}/下{boll_l:.1f} | {"触上轨" if price > boll_u * 0.98 else ("触下轨" if price < boll_l * 1.02 else "中轨")} |
+| 布林带 | 上{boll_u:.1f}/中{boll_m:.1f}/下{boll_l:.1f} | {boll_pos} |
 | 量比(5d/20d) | {vol_ratio:.2f} | {"放量" if vol_ratio > 1.5 else ("缩量" if vol_ratio < 0.7 else "正常")} |
 | MA5/20/50/120/200 | {ma5:.1f}/{ma20:.1f}/{ma50:.1f}/{ma120:.1f}/{ma200:.1f} | {"多头排列" if ma5 > ma20 > ma50 else "空头排列" if ma5 < ma20 < ma50 else "纠缠"} |
 
 ### SEPA Stage 判断
 - **当前 Stage**：**{sepa_stage}**
-- 趋势模板：价格{">" if price > ma50 else "<"}MA50{">" if ma50 > ma120 else "<"}MA120{">" if ma120 > ma200 else "<"}MA200""")
+- 趋势模板（Minervini 准则满足 {sepa_met}/7；第 8 条相对强度 RS 无基准数据源，未评估）：
+{sepa_lines}""")
 
     # Wyckoff 分析（原有技术分析核心）— 变量已在前面提取
     if wk is not None:
@@ -1135,6 +1219,7 @@ margin: "{margin}"
     L.append(f"""
 - **最大仓位上限**：{"60%（基本面优质）" if gm > 50 and roe > 15 else "40%（中等）" if gm > 25 else "20%（高风险）"}
 - **当前 ATR 风险线**：¥{_entry_stop(price, atr):.2f}（当前价 - 2.5×ATR；跌破后取消未成交加仓计划）
+- 注：盈亏比（R/R）<1 的价位已自动过滤（风险大于回报不出现在格网中）
 
 ---
 
@@ -1157,9 +1242,9 @@ margin: "{margin}"
 
 | 时间 | 事件 | 超预期→ | 不及预期→ |
 |------|------|---------|-----------|
-| 季报期 | 下次财报 | 营收增速维持{rev_g:.0f}%+ → +10% | 增速下滑 → -15% |
-| 行业政策 | {industry}政策变动 | 利好 → +8% | 收紧 → -10% |
-| 宏观 | 央行利率/汇率 | 宽松 → +5% | 收紧 → -8% |
+| {earnings_row_label} | 下次财报 | 营收增速维持{rev_g_text}+ → +10% | 增速下滑 → -15% |
+| 行业政策 | {industry}政策变动（通用情景，非数据驱动） | 利好 → +8% | 收紧 → -10% |
+| 宏观 | 央行利率/汇率（通用情景，非数据驱动） | 宽松 → +5% | 收紧 → -8% |
 
 ---
 
@@ -1181,6 +1266,18 @@ margin: "{margin}"
     L.append(GLOSSARY)
 
     report = "\n".join(L)
+
+    # 报告质量检查（只打印不阻断，与 pipeline 容错原则一致）
+    try:
+        from analyzer.report_quality import ReportQualityEvaluator
+
+        quality = ReportQualityEvaluator().evaluate(report, {})
+        if not quality.passed:
+            print(f"  ⚠️ {sym} 报告质量分 {quality.score}/100：")
+            for issue in quality.issues[:5]:
+                print(f"     - [{issue.severity}] {issue.code}: {issue.message}")
+    except Exception:
+        pass
     # 货币符号：A股 ¥ / 港股 HK$ / 美股 $（此前全文硬编码 ¥，统一在此替换）
     cur = "HK$" if sym.endswith(".HK") else ("$" if sym.endswith(".US") else "¥")
     report = report.replace("¥", cur)
@@ -1189,7 +1286,7 @@ margin: "{margin}"
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / fname).write_text(report, encoding="utf-8")
     if write_to_obsidian:
-        persist_to_obsidian(sym, name, report, title_date)
+        persist_to_obsidian(sym, name, report)
     return score, len(report)
 
 
